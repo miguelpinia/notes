@@ -1,0 +1,50 @@
+#+title: Notes
+#+author: Miguel Piña
+#+date: [2022-10-13 jue 19:22]
+
+* Introduction
+
+This repository will help to mantain my notes about courses and other
+interesting things. The default format for the documents is [[https://orgmode.org/][org-mode]].
+
+To export a file to PDF, inside emacs, call =C-c C-e= which is bound to the
+function org-export-dispatch. Inside each file, there is a setup code block to
+stablish the mode in how to compile the document. By example, each document
+should have something like the following:
+
+#+begin_example
+   #+name: export-setup
+   #+begin_src emacs-lisp :results silent :var this-year="2022"
+     (setq-local org-latex-pdf-process
+           (let
+               ((cmd (concat "pdflatex -shell-escape -interaction nonstopmode"
+                             " --synctex=1"
+                             " -output-directory %o %f")))
+             (list cmd
+                   "cd %o; if test -r %b.idx; then makeindex %b.idx; fi"
+                   "cd %o; bibtex %b"
+                   cmd
+                   cmd
+                   "mv *.svg %o/"
+                   "mv *.png %o/"
+                   "rm -rf %o/svg-inkscape"
+                   "mv svg-inkscape %o/"
+                   "rm -rf *.{aux,bbl,blg,fls,out,log,toc}"
+                   (concat "cp %o/%b.pdf ../docs/" this-year "/%b.pdf"))))
+     (setq-local org-latex-subtitle-format "\\\\\\medskip
+                            \\noindent %s")
+     (setq-local org-confirm-babel-evaluate nil)
+   #+end_src
+#+end_example
+
+* Current documents
+
+** Notes of distributed computing
+
+   There are three files with content in spanish. Those documents are:
+
+   - Notes
+   - Assigments
+   - Exams
+
+** Notes of concurrent computing
