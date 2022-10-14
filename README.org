@@ -12,7 +12,7 @@ function org-export-dispatch. Inside each file, there is a setup code block to
 stablish the mode in how to compile the document. By example, each document
 should have something like the following:
 
-#+begin_example
+#+begin_src org
    #+name: export-setup
    #+begin_src emacs-lisp :results silent :var this-year="2022"
      (setq-local org-latex-pdf-process
@@ -35,7 +35,7 @@ should have something like the following:
                             \\noindent %s")
      (setq-local org-confirm-babel-evaluate nil)
    #+end_src
-#+end_example
+#+end_src
 
 * Current documents
 
