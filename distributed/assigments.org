@@ -1,0 +1,987 @@
+#+title: Tareas
+#+author: Profesor: Miguel Piña
+#+subtitle: Computación distribuida: Semestre 2023-1
+#+date: \today
+
+
+* Setup                                                            :noexport:
+
+** General startup and export options
+   #+startup: noptag overview hideblocks
+   #+language: es
+   #+options: toc:nil tags:nil -:nil
+   #+latex_class: article
+   #+latex_header: \usepackage[AUTO]{babel}
+   #+latex_header: \usepackage{fullpage, environ} \usepackage[charter]{mathdesign}
+   #+latex_header: \usepackage{mdframed} \usepackage{svg} \usepackage{tikz}
+   #+latex_header: \usepackage{etoolbox} \newtoggle{solutions} \togglefalse{solutions}
+   #+latex_header: \usepackage{enumitem} \setenumerate{itemsep=0.5em}
+   #+latex_header: \NewEnviron{solution}{\iftoggle{solutions}{\vspace{1em}\begin{mdframed}\begin{proof}\textbf{[Solución]} \BODY\end{proof}\end{mdframed}\vspace{1em}}{}}
+   #+latex_header: \usepackage{listings,chngcntr}% http://ctan.org/pkg/listings
+   #+latex_header: \lstset{ basicstyle=\ttfamily, mathescape=true, frame=Trbl, numbers=left}
+   #+latex_header: \renewcommand{\thelstlisting}{\thesection.\arabic{lstlisting}}
+   #+latex_header: \renewcommand{\lstlistingname}{Pseudocódigo}
+   #+latex_header: \counterwithin{lstlisting}{section}
+   #+latex_header: \usetikzlibrary{arrows,automata,positioning}
+
+   #+property: header-args:dot :exports results :results drawer
+   #+property: header-args:python :exports results :results value latex drawer
+
+
+** Export setup
+   This code block defines local variables for LaTeX export.
+   In particular, we do the following, among other things.
+   1. Get ~org-latex-pdf-process~ to run ~pdflatex~ with ~shell-escape~.
+   2. Additionally get ~org-latex-pdf-process~ to move generated image files to
+      the output directory.
+   3. Set a nicer subtitle format.
+   4. Make sure we run ~python3~ (this is only for older machines).
+
+   Export into the artifcats directory
+   #+export_file_name: artifacts/assignments
+
+   #+name: export-setup
+   #+begin_src emacs-lisp :results silent :var this-year="2022"
+     (setq-local
+      org-latex-pdf-process
+      (let ((cmd (concat "pdflatex -shell-escape -interaction nonstopmode"
+                         " --synctex=1"
+                         " -output-directory %o %f")))
+        (list "cp refs.bib %o/"
+              cmd
+              cmd
+              "cd %o; if test -r %b.idx; then makeindex %b.idx; fi"
+              "cd %o; bibtex %b"
+              cmd
+              cmd
+              "mv *.svg %o/"
+              "mv *.png %o/"
+              "rm -rf %o/svg-inkscape"
+              "mv svg-inkscape %o/"
+              "rm -rf *.{aux,bbl,blg,fls,out,log,toc}"
+              (concat "cp %o/%b.pdf docs/" this-year "/%b.pdf")))
+      org-latex-subtitle-format "\\\\\\medskip\\noindent %s"
+      org-confirm-babel-evaluate nil
+      org-babel-python-command "python3")
+   #+end_src
+
+
+** Other export helpers
+   #+name: export-subtree
+   #+begin_src emacs-lisp :results silent
+     (defun export-subtree ()
+       (let ((tags (org-get-tags)))
+         (unless (member "noexport" tags)
+           (org-latex-export-to-pdf nil t))))
+   #+end_src
+
+   #+name: export-everything :results silent
+   #+begin_src emacs-lisp
+     (org-map-entries
+      (lambda ()
+        (let ((filename (org-entry-get nil "export_file_name")))
+          (if (and filename (not (string-blank-p filename)))
+              (export-subtree))))
+      t
+      'file)
+   #+end_src
+
+
+** Miscellaneous helpers
+
+   See the "Post-processing" section of [[https://orgmode.org/manual/Results-of-Evaluation.html][this section of the org manual]].
+
+   We use this particularly for ~dot~ source blocks that output files, and we want
+   them to render in LaTeX with a specified width.
+
+   #+name: attr_wrap
+   #+begin_src sh :var data="" :var widthf="1" :results output
+     echo "#+attr_latex: :width $widthf\\textwidth"
+     echo "$data"
+   #+end_src
+
+   This block defines the LaTeX code to toggle solutions on or off based on a
+   headline tag of ~:solved:~.
+
+   #+name: togglesolutions
+   #+begin_src emacs-lisp :results value latex :exports results
+     (let ((tags (org-get-tags nil t)))
+       (if (member "solved" tags)
+           "\\toggletrue{solutions}"
+         "\\togglefalse{solutions}"))
+   #+end_src
+
+   This block appends "-solved" to the export file name for assignments that
+   have the ~:solved:~ tag.
+
+   It also removes the "-solved" suffix from the export file name for
+   assignments that either don't have the ~:solved:~ tag.
+
+   This will locally be added to the ~before-save-hook~.
+
+   #+name: process-export-filenames
+   #+begin_src emacs-lisp :results output silent
+     (org-map-entries
+      (lambda ()
+        (let ((filename (org-entry-get nil "export_file_name")))
+          (if (and filename (not (string-blank-p filename)))
+              (unless (string-match "-solved$" filename)
+                (org-entry-put nil "export_file_name" (concat filename "-solved"))))))
+      "solved"
+      'file)
+     (org-map-entries
+      (lambda ()
+        (let ((filename (org-entry-get nil "export_file_name")))
+          (if filename
+              (org-entry-put nil "export_file_name" (string-remove-suffix "-solved" filename)))))
+      "-solved|unsolved"
+      'file)
+   #+end_src
+
+
+** Skeletons
+
+   Define skeletons for commonly-used templates.
+   In this case, for assignments and for worksheets.
+
+#+name: skeletons
+#+begin_src emacs-lisp :results silent :exports none
+  (define-skeleton tarea-skeleton
+    "Docstring"
+    "Number: "
+    "* Tarea " str " (Entrega el " (setq v1 (skeleton-read "Entrega el: ")) " a las 23:59) :assignment:tarea: \n"
+    >":properties:\n"
+    >":export_file_name: artifacts/tarea-"str"\n"
+    >":export_date: \\today\n"
+    >":end:\n"
+    >"#+call: togglesolutions()\n"
+    )
+#+end_src
+
+
+* Tarea 1 (Entrega el 6 de septiembre del 2022 a las 23:59) :assignment:solved:
+  :properties:
+  :export_file_name: artifacts/tarea-1-solved
+  :export_date: \today
+  :end:
+  #+call: togglesolutions()
+
+
+* Tarea 2 (entrega el 14 de septiembre del 2022 a las 23:59) :assignment:solved:
+:properties:
+:export_file_name: artifacts/tarea-2-solved
+:export_date: \today
+:end:
+#+options: num:nil
+#+call: togglesolutions()
+
+Tus respuestas deben ser claras y concisas. Si entregas tu tarea escrita a mano,
+que tu escritura sea legible, de otra forma ĺa tarea será descartada.
+
+** Problemas
+
+1. *(1 punto)* Considera el algoritmo de Flooding visto en clase. Demuestra el
+   siguiente corolario:
+
+   Todo proceso \(p_i\) que ejecuta el algoritmo de /Flooding/, recibe M en tiempo
+   a lo más el diámetro \(Diam(G)\) de la gráfica del sistema distribuido.
+
+   #+begin_solution
+   El diámetro de G es \(Diam(G) = \max\limits_{u,\ v\ \in\ V}\{d_G(u,
+   v)\}\). Todo proceso \(p_j\) está a distancia a lo más \(Diam(G)\) de
+   \(r_0\). Por la ejecución del algoritmo, cada vez que un proceso recibe un
+   mensaje, este lo reenvía a sus vecinos y no lo vuelve a reenviar. Este
+   proceso toma una ronda de ejecución. Podemos observar que el peor caso es
+   cuando la distancia de \(r_0\) a \(p_j\) es igual a \(Diam(G)\). Por
+   definición de \(Diam(G)\) no hay procesos más alejados. Entonces,
+   el total de rondas es a lo más \(Diam(G)\).
+   #+end_solution
+
+2. *(1 punto)* Considera el algoritmo de BroadcastTree visto en clase. ¿Cuál sería
+   el peor caso en complejidad de tiempo para el algoritmo BroadcastTree?
+   Explica detalladamente.
+
+   #+begin_solution
+   Consideremos una gráfica \(G\) de \(n\) procesos, cuya topología sea un
+   camino simple (sigue siendo un árbol).  La raíz corresponde al proceso líder
+   \(r_0\) y la única hoja \(p_j\). El total de aristas que hay
+   entre \(r_0\) y \(p_j\) es \(n - 1\) por lo que el total de rondas es n - 1,
+   siendo esta la cota superior del peor caso en complejidad de tiempo, ya que
+   es el \(Diam(G)\) más largo que hay para este tipo de gráficas (árboles).
+   #+end_solution
+
+3. *(2 puntos)* Considera el algoritmo de BroadConvergecast visto en clase.
+
+   1. Prueba el siguiente lema: "Todo proceso \(p_i\) a profundidad \(D\),
+      recibe el mensaje \(<START>\) en tiempo \(D\)".
+
+      #+begin_solution
+      Por inducción sobre D:
+
+      - Caso base :: \(D = 1\), todos los hijos de la raíz han recibido el
+        mensaje \(<START>\) en la ronda 1.
+      - Hipótesis de inducción :: Suponemos que todos los procesos a
+        profundidad \(D - 1\) han recibido el mensaje en tiempo \(D - 1\).
+      - Paso inductivo :: Consideremos un proceso \(p_j\) a distancia D del
+        proceso raíz. Dado que se encuentra a distancia \(D\), existe un proceso
+        a distancia \(D - 1\) de la raíz que es su PADRE y por H.I. este recibe
+        el mensaje \(<START>\) en la ronda \(D - 1\). Para la ronda \(D\), el
+        PADRE ejecuta la segunda parte del algoritmo y envía \(<START>\) a todos
+        sus hijos y en esa misma ronda \(p_j\) recibe el mensaje \(D\).
+      #+end_solution
+
+   2. Prueba el siguiente lema: "Todo proceso \(p_i\) a profundidad \(D\)
+      envía su mensaje a la raíz en el tiempo \(D + 2 * altura(p)\)".
+
+      #+begin_solution
+      Por el punto anterior, sabemos que el proceso \(p_i\) a profundidad \(D\)
+      recibe <START> en el tiempo D, al momento de recibir el mensaje, el
+      proceso reenvía el mensaje <START> a todos sus hijos y en particular, para
+      llegar a la hoja más alejada le tomará \(altura(p_i)\) rondas. Este
+      mismo tiempo le tomará al proceso hoja más alejado enviar \(<OK, acc>\),
+      mientras se acumula la información con sus demás hermanos/ancestros.
+
+      En este punto podemos observar que el tiempo utilizado hasta aquí es:
+
+      \(D + 2 * altura(p_i)\)
+
+      Y por la definición del algoritmo, en esa ronda al terminar de recibir la
+      información de todos los hijos, el proceso \(p_i\) envía su mensaje a su
+      padre.
+
+      Nota: Esto funciona porqué estamos trabajando en un sistema síncrono
+      #+end_solution
+
+4. *(1 punto)* ¿Se basan los algoritmos de BroadcastTree y ConvergeCast en el
+   conocimiento acerca del número de nodos en el sistema? ¿Por qué?
+
+   #+begin_solution
+   No. El único conocimiento previo que deben tener es sobre las variables ~PADRE~
+   e ~HIJOS~. Con estas variables podemos saber a quien mandar mensajes y en que
+   momento enviarlos de acuerdo al cambio de estado interno de cada proceso.
+   #+end_solution
+
+5. *(3 puntos)* Generaliza el algoritmo de Broadconvergecast para:
+
+   1. Construya un árbol generador, es decir, inicialmente cada proceso tendrá
+      sus variables PADRE = \(\bot\) e HIJOS = \(\emptyset\) y conforme el
+      algoritmo vaya avanzando en el número de rondas, esas variables se vayan
+      actualizando. El proceso raíz (distinguido) debe conocer el momento en que
+      se terminó de construir este árbol generador.
+
+      #+begin_solution
+      Consideremos el siguiente algoritmo /spanningTree/, este algoritmo es
+      prácticamente idéntico al algoritmo de /broadconvergecast/, salvo que ahora,
+      por proceso, no tenemos las variables PADRE e HIJOS con la información de
+      los procesos con esos roles. Ahora tenemos una variable llamada VECINOS
+      que lista todos los vecinos de un proceso e iniciamos con dos variables
+      nulas (\(PADRE_ST,\ HIJOS_ST\)) donde guardaremos la información que se
+      vaya recolectando. Ahora, cada vez que un proceso reciba un mensaje de
+      tipo \(<START, ID\_PARENT>\), verificará si ya estableció su padre y si no
+      lo ha hecho, actualizará la variable \(PADRE\_ST\) con \(ID\) y enviará
+      el mensaje <START, ID> a todos sus hijos si es que tiene. Si es una hoja,
+      envía su ID a su padre para que lo reconozca como su hijo. Esto permitirá
+      construir el conjunto de hijos para ese proceso.
+
+      Con esto, cada proceso, parcialmente tiene el conocimiento necesario para
+      qué, desde el proceso raíz \(r_0\) se pueda dirigir todo el tráfico sobre
+      un árbol generador en caso de posteriores ejecuciones.
+      #+end_solution
+
+      #+attr_latex: :options [caption=Algoritmo Spanning Tree]
+      #+begin_lstlisting
+      Algoritmo spanningTree(ID, soyRaiz, valor):
+        src_latex{$PADRE\_ST = \bot$}
+        src_latex{$HIJOS\_ST = \emptyset$}
+        src_latex{$VECINOS,\ noVecinos = 0,\ acc = valor$}
+
+        Ejecutar inicialmente:
+          if soyRaiz then
+            src_latex{$PADRE\_ST = ID$}
+            send(<START, ID>) a todos en VECINOS
+
+        Al recibir <START, src_latex{$ID\_PARENT$}>:
+          if src_latex{$PADRE\_ST == \bot$} then
+            src_latex{$PADRE\_ST = ID\_PARENT$}
+            if src_latex{$|VECINOS\ \textbackslash\ \{ID\_PARENT\}| \neq 0$}  then
+              send(<START>) a todos en src_latex{$VECINOS\ \textbackslash\ \{ID\_PARENT\}$}
+            else
+              send(<OK, acc, ID>) a src_latex{$ID\_PARENT$}
+
+       Al recibir <OK, ACC, ID> de src_latex{$VECINOS\ \textbackslash\ \{PADRE\_ST\}$}:
+         noVecinos++
+         src_latex{$HIJOS\_ST = HIJOS\_ST \cup \{ID\}$}
+         acc = f(acc, ACC)
+         if noVecinos == src_latex{$|VECINOS\ \textbackslash\ \{PADRE\_ST\}|$} then
+           if soyRaiz then
+             reportar termino de construccion de árbol
+             return acc
+           else
+             send(<OK, acc, ID>) a src_latex{$PADRE\_ST$}
+      #+end_lstlisting
+
+   2. Suponga que cada proceso tiene una entrada distinta para reportar algo
+      (pueden ser información de sensores, lecturas, etc.) A partir del
+      algoritmo anterior, indica las modificaciones que se tendrían que hacer en
+      el algoritmo, para que se recolecte la información de estos procesos y la
+      raíz tenga todas las entradas. Analiza la complejidad de bits, es decir, el
+      total de bits que son enviados sobre los canales de comunicación (hint:
+      /Cada mensaje de información puede tomar k bits/).
+
+      #+begin_solution
+      Los cambios serían en las líneas 17, 19, 22 del algoritmo
+      anterior. En esta solución, se construye también la información sobre las
+      variables PADRE e HIJOS de cada proceso para el árbol generado. Si se
+      presenta una solución suponiendo que ya existen estas variables, también
+      es válida, siempre y cuando la idea presentada sea similar a la expuesta
+      en esta solución. En esas líneas se cambiaría lo siguiente:
+
+      - Linea 4: acc es una lista con la entrada /valor/.
+      - Línea 19: ACC, una estructura de tipo lista, con los valores
+        recolectados hasta el momento.
+      - Línea 22: La función f se puede reemplazar por una función =concat= que
+        mezcle dos listas, la que está temporalmente guardada en el proceso y la
+        que recibió como mensaje.
+      - Linea 28: Envía la lista al padre al terminar de obtener todos los
+        valores.
+
+      Para la complejidad de bits, dado que el algoritmo es básicamente el mismo
+      que broadconvergecast, tenemos que la complejidad de mensajes es de \(2 *
+      (|V| - 1)\) por lo visto en clase, en particular, \(|V| - 1\) mensajes
+      enviados por la parte de broadcast y \(|V| - 1\) mensajes por la parte de
+      convergecast.
+
+       Por otro lado, observemos el peor caso en el que se envíe
+      la mayor cantidad de bits, y este es el caso en que la gráfica sea un
+      camino con el proceso raíz \(r_0\) en un extremo. La raíz envía a su hijo
+      un mensaje de a lo más k bits \((<START>)\). Esto se repite hasta llegar
+      la única hoja, por lo que se enviaron (|V| - 1)k bits para la parte de
+      broadcast.  Para la parte correspondiente al convergecast, la única hoja
+      de este árbol, enviará k bits a su padre y este a su vez 2k bits. Este
+      proceso de reenvío continúa hasta la raíz, donde el hijo de la raíz
+      enviará \((n - 1)k\) bits que es el tamaño más grande posible de los
+      mensajes. Esto se traduce en que el número de bits enviados desde la hoja
+      hasta el padres es: \(\sum\limits_{i = 1}^{n - 1} i*k = k\frac{n(n -
+      1)}{2}\), por lo que el total de bits enviados es \(k((n-1) + \frac{n(n -
+      1)}{2}) = k\frac{n^2 + n - 2}{2}\), de esto podemos decir que la
+      complejidad de bits enviados es de O(n^2) tomando \(k\) constante.
+
+      El mejor caso para el envío de bits es cuando tengamos un árbol completo y
+      balanceado. Tenemos que el total de mensajes por nivel está dado por la
+      siguiente expresión:
+
+      \begin{equation}
+      \label{eq:1}
+      S_p = m + m^2 + \ldots + m^{\log_{m}{n}} =
+      \sum\limits_{i=1}^{\log_{m}{n}}m^i = \sum\limits_{i=1}^{p}m^i
+      \end{equation}
+
+      Siendo \(m\) el factor de ramificación y \(n\) el total de
+      vértices. Entonces:
+
+      \begin{equation}
+      \label{eq:2}
+      m*S_p = m^2 + m^3 + \ldots + m^{\log_{m}{n} + 1} =
+      \sum\limits_{i=1}^{\log_{m}{n} + 1}m^i = \sum_{i=1}^{p + 1}m^i
+      \end{equation}
+
+      Restando \ref{eq:1} de \ref{eq:2}
+
+      \begin{align*}
+      \label{eq:result}
+      m * S_n - S_n &= m^{p + 1} - m\\
+      (m - 1) * S_n &= m^{p + 1} - m\\
+      S_n &= \frac{m^{p + 1} - m}{m - 1}\\
+          &= \frac{m(m^p - 1)}{m - 1}\\
+          &= \frac{m(m^{\log_{m}{n}} - 1)}{m - 1}\\
+          & = \frac{m(n - 1)}{m - 1}
+      \end{align*}
+
+      De aquí podemos decir que se enviaron \(\frac{m(n - 1)}{m - 1}\)
+      k bits, por lo que la complejidad queda en \(O(n)\) tomando k constante.
+      #+end_solution
+
+6. *(2 puntos)* Da un algoritmo distribuido para contar el número de procesos en
+   cada capa de un árbol enraizado T de forma separada. Al final la raíz
+   reportará el número de procesos por capa. Analiza la complejidad de tiempo y
+   la complejidad de mensajes de tu algoritmo.
+
+   #+begin_solution
+   Consideremos el algoritmo =verticesNivel=, este algoritmo está basado en
+   broadConvergecast, con la diferencia de que los mensajes enviados por los
+   padres incluyen el nivel en el que se encuentran. Los mensajes enviados por
+   las hojas son un diccionario de una entrada con su nivel como llave y el
+   valor de 1 indicando que son el único ahí. Cuando el mensaje es recibido por
+   el padre, este invoca una función nombrada =mergeDict=, la cuál se encarga de
+   mezclar los diccionarios recibidos. Dado que cada diccionario puede tener
+   valores distintos para una misma llave, el protocolo que sigue la función es
+   la de sumar los valores si hay llaves en común y agregar los valores de
+   llaves que no se encuentren en el segundo diccionario. Al final el proceso de
+   mezcla se realiza para todos los vértices de la gráfica conforme van los
+   mensajes de vuelta.
+
+   Este algoritmo es básicamente el mismo que =broadconvergecast= con la
+   diferencia de que los mensajes son diccionarios y la función de agregación
+   trabaja con diccionarios, los cuáles no afectan en el análisis de tiempo y
+   mensajes para =broadconvergecast=, deducimos que:
+
+   - Tiempo = \(2 * prof(T)\), con \(T\) el árbol generador asociado a la
+     gráfica original.
+
+   - Mensajes = \(2*(|V| - 1)\), con \(V\) el total de procesos en el
+     sistema.
+   #+end_solution
+
+   #+attr_latex: :options [caption=Algoritmo verticesNivel]
+   #+begin_lstlisting
+   Algoritmo verticesNivel(ID, soyRaiz):
+     PADRE, HIJOS, noHijos = 0, acc = \{\}, nivel = 0
+
+     Ejecutar inicialmente:
+       if soyRaiz then
+         send(<START, 0>) a todos en HIJOS
+
+     Al recibir <START, nivelPadre> de PADRE:
+       nivel = nivelPadre + 1
+       if src_latex{$|HIJOS| \neq 0$} then
+         send(<START>, nivel) a todos en HIJOS
+       else
+         send(\{nivel: 1\}}) a PADRE // key = nivel
+
+     Al recibir dict desde algun puerto en HIJOS
+       noHijos++
+       acc = mergeDict(acc, dict)
+       if src_latex{$|HIJOS| == noHijos$} then
+         if soyRaiz then
+           return acc
+         else
+           send(acc) a PADRE
+
+   FUNCTION mergeDict(d1, d2):
+     for each key in d1 do
+       if key in d2 then
+         d2[key] += d1[key]
+       else
+         d2[key] = d1[key]
+     return d2
+   #+end_lstlisting
+
+
+* Tarea 3 (Entrega el 26 de septiembre del 2022 a las 23:59) :assignment:solved:
+  :properties:
+  :export_file_name: artifacts/tarea-3-solved
+  :export_date: 28 de septiembre del 2022
+  :end:
+  #+options: num:nil
+  #+call: togglesolutions()
+
+  Tus respuestas deben ser claras y concisas. Si entregas tu tarea escrita a
+  mano, que tu escritura sea legible, de otra forma ĺa tarea será descartada.
+
+** Problemas
+
+   1. *(2 puntos)* Investiga y explica brevemente el concepto de /time-to-live/
+      (TTL) usado en redes de computadoras, y úsalo para modificar el algoritmo
+      de flooding visto en clase, de modo que un líder comunique un mensaje
+      \(m\) a los procesos a distancia a lo más \(d\) del líder (\(m\) y \(d\)
+      son entradas del algoritmo); todos los procesos a distancia mayor no
+      deberán recibir \(m\). Da un breve argumento que demuestre que tu
+      algoritmo es correcto, y también haz un análisis de tiempo y número de
+      mensajes.
+
+      #+begin_solution
+      El concepto de =time-to-live= se refiere a la indicación de por cuantos
+      nodos puede pasar un paquete de datos enviado por la red, antes de ser
+      descartado o devuelto a su origen. Modificamos el algoritmo de Flooding
+      como se muestra en el algoritmo [[ref:alg:newFlooding]]. Esta versión, el líder
+      envía como mensaje la tupla formada por los valores \(\langle m,
+      d\rangle\) (siempre que d > 0). Y cuando un proceso recibe dicha tupla,
+      actualizará el estado de =flag= y reenviará el mensaje si el valor de d es
+      mayor que cero.
+
+      Para argumentar que el algoritmo es correcto, podemos observar dos cosas:
+
+      1. Si \(d > 0\) al inicio del algoritmo, este se ejecutará y comenzará a
+         enviar mensajes.
+      2. De la demostración hecha en clase, sabemos que todo proceso recibe
+         \(M\) en a los más tiempo \(D\), con \(D\) el diámetro de la
+         gráfica. Siguiendo esta lógica, si consideramos la subgráfica inducida
+         por todos los vértices que están a distancia d del líder, recibirán el
+         mensaje en a lo más en la ronda \(d\). Para mostrar que ningún proceso
+         a distancia mayor de \(d\) recibe \(m\), supongamos por contradicción,
+         que existe un proceso \(p_k\) a distancia \(d + 1\) que recibe el
+         mensaje. Sabemos que cada vez que el mensaje es reenviado, \(d\) es
+         disminuido una unidad. Entonces, si \(p_k\) recibe el mensaje \(m\),
+         entonces la distancia de \(p_k\) debe ser menor o igual a \(d\), ya que
+         en el momento en que el valor \(d\) reenviado llegue a cero, esto
+         significa que el proceso está a distancia \(d\) del líder y ya no se
+         reenvían mensajes, pero habíamos supuesto que \(p_k\) estaba a
+         distancia \(d + 1\), *contradicción*.
+
+      El número de rondas es \(d\) y envía a lo más \(2|E|\) mensajes con \(E\)
+      el número de aristas.
+      #+end_solution
+
+      #+attr_latex: :options [caption=Algoritmo Flooding, label=alg:newFlooding]
+      #+begin_lstlisting
+      Algoritmo Flood(ID, Lider, M, d):
+        flag = False
+        Ejecutar inicialmente:
+            if ID == Lider and d > 0:
+                flag = True
+                send(<M>, d - 1) por todos los puertos
+
+        Al recibir <M, d> por algún puerto:
+            if not flag and d > 0:
+                flag = True
+                send(<M>, d - 1) por todos los puertos
+      #+end_lstlisting
+
+   2. *(2 puntos)* Considera un sistema distribuido representado como una gráfica
+      de tipo anillo, cuyos canales son bidireccionales, con \(n = mk\)
+      procesos, con \(m > 1\) y \(k\) es impar. Los procesos en las posiciones
+      \(0,\ k,\ 2k,\ \ldots, (m - 1)k\) son marcados inicialmente como líderes,
+      mientras que procesos en otras posiciones son seguidores. Todos los
+      procesos tienen un sentido de dirección y pueden distinguir su vecino
+      izquierdo de su vecino derecho, pero ellos no tienen información alguna
+      acerca de sus /ids/.
+
+      El algoritmo [[ref:alg:recluta]]  está destinado a permitir que los líderes
+      recluten seguidores. No es difícil ver que todo seguidor eventualmente se
+      agrega a sí mismo a un árbol enraízado con padre en algún líder. Nos
+      gustaría que todos esos árboles tuvieran aproximadamente el mismo número
+      de nodos.
+
+      #+attr_latex: :options [caption=Algoritmo reclutamiento, label=alg:recluta]
+      #+begin_lstlisting
+      Algoritmo reclutamiento(id, soyLider):
+
+        Inicialmente hacer:
+          if soyLider then
+            parent = id
+            send(<recluta>) a ambos vecinos
+          else
+            src_latex{$parent = \bot$}
+
+        Al recibir <recluta> desde p hacer:
+          if src_latex{$parent = \bot$} then
+            parent = p
+            send(<recluta>) a mi vecino que no es p
+      #+end_lstlisting
+
+      - ¿Cuál es el tamaño mínimo y máximo posible de un árbol
+
+       #+begin_solution
+        Podemos probar por inducción que para cada \(t\) con \(0 \le t \le
+        \frac{k - 1}{2}\), y para cada \(0 \le i \le m - 1\), cada nodo en la
+        posición \(ik \pm t\) se asocia con el árbol enraízado en el nodo \(ik\)
+        en el tiempo \(t\). Esto pone exactamente \(k\) nodos en cada árbol.
+        #+end_solution
+
+      - Dibuja el resultado de una ejecución para el algoritmo con \(k = 5\) y
+        \(m  = 4\).
+
+        #+begin_solution
+        Podemos observar el resultado de la ejecución en la figura [[fig:ejercicio2]].
+        #+end_solution
+
+        #+caption: Resultado de la ejecución con \(k = 5 \text{ y } m = 4\)
+        #+attr_latex: scale=0.9\textwidth :center
+        #+label: fig:ejercicio2
+        [[file:figs/tarea3.ej.2.png]]
+
+   3. *(1 punto)* ¿El árbol generador de la figura [[fig:bfs]] puede obtenerse en
+      alguna ejecución del algoritmo BFS visto en clase? de ser el caso,
+      describe la ejecución, y de no serlo, explica por qué no se puede. Haz lo
+      mismo con el algoritmo DFS.
+
+      #+caption: Un árbol generador. La raíz se denota con un circulo.
+      #+attr_latex: scale=0.9\textwidth
+      #+label: fig:bfs
+      [[./figs/casita.png]]
+
+      1. Caso BFS
+
+         #+begin_solution
+         Si es posible la construcción dicho árbol. La secuencia para construir
+         dicho árbol es la siguiente:
+
+         En la ronda 1, la raíz envía mensaje a sus dos hijos. En la ronda 2,
+         cada hijo envía de forma simultánea el primer mensaje a los hijos que
+         están en el árbol
+         #+end_solution
+
+      2. Caso DFS
+
+         #+begin_solution
+         No es posible generar este árbol. El algoritmo DFS en la primera ronda
+         avanza hacia alguno de los dos hijos de la raíz. En la segunda ronda,
+         hace lo mismo y mientras existan hijos seguirá avanzando. Dependiendo
+         de como elija al siguiente nodo para avanzar el algoritmo de DFS, el
+         nodo que correspondería al segundo hijo del nodo distinguido, será
+         descubierto en la tercera o cuarta ronda.
+         #+end_solution
+
+   4. *(1 punto)* Describe un algoritmo distribuido para construir un árbol
+      generador sobre una gráfica arbitraria G, utilizando el algoritmo de
+      elección de líder =eligeLider= para determinar la raíz del árbol y también
+      el algoritmo BFS. Analiza la complejidad de tiempo y de mensajes.
+
+      #+begin_solution
+      Ejecutamos primero el algoritmo de elección de líder visto en clase. Al
+      finalizar la ejecución, cada proceso tiene la variable líder establecida
+      al líder del sistema. El sistema en este estado, puede ejecutar el
+      algoritmo BFS visto en clase y al finalizar, utilizando el conjunto de
+      Hijos y la variable Padre de cada proceso, podemos inducir un árbol
+      generador para la gráfica. Consideremos el algoritmo ref:alg:liderbfs
+
+      - Complejidad de tiempo :: Sabemos qué:
+
+        - EligeLider: \(D\) rondas, \(D\) el diámetro de la gráfica.
+        - BFS: \(D\) rondas, \(D\) el diámetro de la gráfica
+
+        Por lo qué, el tiempo total de este algoritmo es de \(2 * D\) rondas.
+
+      - Complejidad de mensajes :: Sabemos qué:
+
+        - EligeLider: \(2 * D * |E|\) mensajes, \(D\) diámetro de la gráfica,
+          \(E\) el conjunto de aristas.
+        - BFS: \(O(|E|)\) mensajes, \(E\) el conjunto de aristas.
+
+        Por lo que la complejidad de mensajes de este algoritmo es de
+        \(O(D * |E|)\).
+      #+end_solution
+
+      #+attr_latex: :options [caption=Algoritmo árbol generador basado en elección de lider simple y BFS, label=alg:liderbfs]
+      #+begin_lstlisting
+      Algoritmo LiderBFS(ID, total):
+        src_latex{$Padre = \bot,\ Hijos = \emptyset,\ Otros = \emptyset,\ ronda
+        = 0,\ Lider = ID$}
+
+        Ejecutar en todo momento:
+          if src_latex{$Padre \neq \bot$} then
+            send(<Lider>) a todos los vecinos
+
+        Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
+          Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\}\ \cup\ Lider$}
+          Lider = max(mensajes)
+          ronda = ronda + 1
+          if ronda == total then:
+            Padre = ID
+            send(<BFS, ID>) a vecinos
+
+       Al recibir <BFS, j> desde el vecino src_latex{$p_j$}:
+         if src_latex{$Padre = \bot$} then
+           Padre = j
+           send(<parent>) a src_latex{$p_j$}
+           send(<BFS, ID>) a vecinos excepto src_latex{$p_j$}
+         else
+           send(<already>) a src_latex{$p_j$}
+
+      Al recibir <parent> desde el vecino src_latex{$p_j$}:
+        src_latex{$Hijos = Hijos \cup \{p_j\}$}
+        if src_latex{$Hijos \cup Otros$} tienen a todos los vecinos excepto Padre then
+          terminar
+
+      Al recibir <already> desde el vecino src_latex{$p_j$}:
+        src_latex{$Otros = Otros \cup \{p_j\}$}
+        if src_latex{$Hijos \cup Otros$} tienen a todos los vecinos excepto Padre then
+          terminar
+      #+end_lstlisting
+
+   5. *(2 puntos)* El algoritmo puede mejorar su complejidad de tiempo si se
+      ejecutan de forma paralela los dos algoritmos anteriores, es decir, si se
+      ejecuta la elección de líder y la construcción del árbol BFS. Da un
+      algoritmo distribuido que realice esto y muestra que es
+      correcto. Adicionalmente, compara la complejidad de tiempo respecto al
+      algoritmo anterior.
+
+      #+begin_solution
+      Consideremos el algoritmo ref:alg:liderbfsparalelo. En este algoritmo,
+      suponemos que la función \(\max\), opera con vectores y utiliza
+      ordenamiento lexicográfico para realizar las comparaciones, siendo el
+      valor del líder el primer valor a comparar y el segundo el ID del proceso
+      que envío el mensaje.
+
+      Para probar que este algoritmo es correcto, necesitamos probar las
+      siguientes afirmaciones:
+
+      1. El algoritmo construye un árbol BFS. La raíz de este árbol es el valor
+         elegido como líder.
+      2. Se cumple validez.
+      3. Se cumple acuerdo.
+
+
+      Adicional a eso, podemos observar que el algoritmo termina (condicional
+      línea 18).
+
+      #+begin_proof
+
+      1. Consideremos lo siguiente:
+
+         1. *No hay ciclos en la ejecución.* Las variables /Padre/ e /Hijos/ son
+            consistentes, es decir, si un proceso \(p_j\) es hijo de un proceso
+            \(p_i\), entonces, \(p_i\) es padre de \(p_j\). Supongamos por
+            contradicción que se forma un ciclo durante la ejecución del
+            algoritmo \(p_{i1}, p_{i2}, \ldots, p_{ik}, p_{i1}\). Notemos que si
+            \(p_j\) es hijo de \(p_i\), eso implica que el Lider de \(p_i\) era
+            mayor que el de \(p_j\), permitiendo establecer ese vínculo entre
+            ambos procesos. Y como cada proceso en el ciclo es padre del
+            siguiente, esto significaría el valor de \(Lider\) cambie
+            (incrementa) en el ciclo al momento de regresar a \(p_{i1}\), pero
+            manteniendo la dirección del ciclo, lo cuál implicaría que tendría
+            dos padres, lo cuál no puede pasar por el bloque de la línea 11 a
+            la 16. (Además, como el valor del líder cambia, en algún punto en el
+            ciclo tuvo que cambiar de dirección). *Contradicción*.
+
+         2. *Al terminar la ejecución, todo proceso es alcanzable si el sistema
+            original es conexo*. Supongamos por contradicción que algún nodo no
+            es alcanzable por el líder al finalizar el algoritmo. Dado que el
+            sistema es conexo, existen dos procesos \(p_i\) y \(p_j\) distintos
+            del proceso líder, con un canal entre ellos, tal que \(p_j\) es
+            alcanzable desde el líder, pero \(p_i\) no.
+
+            Esto implica que, durante la ejecución del algoritmo, el padre de
+            \(p_i\) se mantiene nulo (\(\bot\)) y el padre de \(p_j\) se
+            establece en algún momento. Tenemos dos opciones:
+
+            - \(Lider_i < Lider_j\). Si lo anterior pasa, entonces, en la
+              siguiente ronda, se establece como padre de \(p_i\) a \(p_j\) por
+              la línea 11 y 15. *Contradicción*.
+
+            - \(Lider_i > Lider_j\). Si lo anterior se mantiene durante toda la
+              ejecución, eso implica que \(p_i\) es el líder al finalizar el
+              algoritmo, siendo el proceso con el ID más grande. Pero por
+              hipótesis, habíamos supuesto que \(p_i\) y \(p_j\) eran distintos
+              del líder que es el proceso con el ID más grande. *Contradicción*.
+
+         3. *El algoritmo construye un árbol BFS*. Por inducción en el número de
+            rondas \(t\). Observaciones:
+
+            1. Cualquier proceso a distancia \(t\) del proceso con el ID máximo,
+               tienen ese ID en su variable Líder.
+            2. La gráfica inducida por todas las variables Padre a partir del
+               proceso con ID máximo, es un árbol BFS consistente de todos los
+               procesos a distancia \(t\).
+
+            Regresando a la prueba por inducción.
+
+            - Caso base :: t = 1. En la primera ronda, todos los procesos a
+              distancia 1 del proceso con ID máximo, eligen como Líder a ese ID
+              (línea 11) y envían un mensaje <parent> al proceso con ID
+              máximo. Por lo que se cumple que es un árbol BFS.
+            - Hipótesis de inducción :: Supongamos que se cumple las dos
+              observaciones para \(t - 1 \ge 1\).
+            - Paso inductivo :: Durante la ronda t, todos los procesos que están
+              a distancia \(t - 1\) del proceso con el ID máximo, difunden a sus
+              vecinos el valor del Lider. Un proceso a distancia \(t - 1\) o
+              menor que reciba el mensaje no cambiará su lider o su padre. Todo
+              proceso a distancia \(t\) recibe el mensaje y dado que el valor
+              del Lider recibido es el del ID máximo, se evalúa la línea 11 como
+              verdadera y se actualiza el valor de Lider y Padre.
+
+      2. *Validez*: Para este caso, es fácil ver que al finalizar el algoritmo, cada
+         proceso termina con un valor que es propuesto por algún proceso, ya que
+         en cada ronda, el valor de líder (independientemente de si es
+         actualizado por la línea 11) es propuesto por algún vecino.
+
+      3. *Acuerdo*:Al terminar el algoritmo, cualesquiera dos procesos \(p_i\) y \(p_j\)
+         con variables \(Lider_i\) y \(Lider_j\) respectivamente, se cumple que
+         \(Lider_i == Lider_j\). Para esto, consideremos dos procesos
+         arbitrarios y para todo tiempo \(d > 0\), si la distancia entre ambos
+         procesos es menor o igual a \(d\) (con \(d > 0\)), entonces, \(Lider_i
+         == Lider_j\). Por inducción sobre el número de rondas.
+
+         - Caso base :: /d == 1/: Tomando dos procesos que están a distancia 1, en
+           la ronda cero enviaron la tupla \(<Lider_i,\ ID-I>,\ i \in \{1,\
+           2\}\), y en la ronda uno, evalúan la línea 8, donde el valor del
+           conjunto /Mensajes/ es igual para ambos. Esto implica que la ejecución
+           de la línea 9 hasta la 21 es igual. Por lo que el valor de líder es
+           igual para ambos.
+
+         - Hipótesis de inducción :: Para cualesquiera dos procesos \(i,\ j\) a
+           distancia d - 1 entre sí, se cumple \(Lider_i == Lider_j\).
+
+         - Paso inductivo :: Consideremos dos procesos \(p_i,\ p_j\) a distancia
+           d. Por hipótesis de inducción, para alguno de los dos procesos,
+           digamos, \(p_i\) se cumple que para todo proceso \(p_k\) a distancia
+           \(d - 1\), se cumple que \(Lider_i == Lider_k\). Entonces, como
+           \(p_j\) está a distancia \(d\) de \(p_i\), existe un proceso \(p_m\)
+           que es vecino de \(p_j\) que está a distancia \(d - 1\) de \(p_i\);
+           en la ronda \(d - 1\), \(p_m\) envía la tupla \(<Lider_i, m>\) a
+           todos sus vecinos, en particular a \(p_j\), por lo que en la ronda
+           \(d\), se establece el nuevo valor de \(Lider_j\) a \(Lider_i\). Esto
+           sucede porqué si \(Lider_j > Lider_i\), el valor de \(Lider_j\) se
+           hubiera difundido en rondas anteriores y en lugar de argumentar la
+           difusión para \(Lider_i\), estaríamos discutiendo el caso simétrico
+           para \(Lider_j\).
+
+      #+end_proof
+
+      Para ver la complejidad de tiempo de este algoritmo, basta con ver la
+      prueba de que el algoritmo construye un árbol BFS. Se puede concluir que
+      la complejidad de tiempo de este algoritmo en el peor caso es cuando \(t
+      == D\), con \(D\) el diámetro.
+
+      Por lo que al compararlo con el tiempo del ejercicio 4, observamos que
+      tuvo una mejora, reduciendo el tiempo a la mitad.
+      #+end_solution
+
+      #+attr_latex: :options [caption=Algoritmo árbol generador basado en elección de lider simple y BFS, label=alg:liderbfsparalelo]
+      #+begin_lstlisting
+      Algoritmo LiderBFSParalelo(ID, total):
+        src_latex{$Padre = \bot,\ Hijos = \emptyset,\ Otros = \emptyset,\ ronda
+        = 0,\ Lider = ID,\ Lideres = \emptyset$}
+
+        Ejecutar en todo momento:
+          send(<Lider, ID>) a todos los vecinos
+
+        Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
+          Mensajes = src_latex{$\{<\text{Lider}_j,\ \text{ID}_j>\ |\ \forall\ j \in \{1,\ \ldots,\ \text{total}\}\}$}
+          mensajeMax = src_latex{$\max(Mensajes)$}
+          nuevoLider = mensajeMax[0], IDNuevoPadre = mensajeMax[1]
+          if src_latex{$nuevoLider > Lider$} then
+            Lider = nuevoLider
+            if  src_latex{$IDNuevoPadre \neq Padre$} then
+              send(<remove>) a Padre if Padre src_latex{$\neq \bot$}
+            Padre = IDNuevoPadre
+            send(<parent>) a IDNuevoPadre
+          ronda++
+          if src_latex{$ronda =​= total$} then
+            if src_latex{$Padre ​== \bot$} then
+              Padre = ID
+            terminar
+
+      Al recibir <parent> desde el vecino src_latex{$p_j$}:
+        src_latex{$\text{Hijos} = \text{Hijos } \cup \{p_j\}$}
+
+      Al recibir <remove> desde el vecino src_latex{$p_j$}:
+        src_latex{$\text{Hijos} = \text{Hijos } \setminus p_j$}
+      #+end_lstlisting
+
+   6. *(2 puntos)* Prueba la siguiente afirmación:
+
+      El algoritmo BFS construye un árbol enraízado sobre un sistema distribuido
+      con \(m\) aristas y diámetro \(D\), con complejidad de mensajes \(O(m)\) y
+      complejidad de tiempo \(O(D)\).
+
+      #+begin_solution
+      Considerando la prueba de la siguiente afirmación hecha en clase:
+
+      ``El algoritmo BFS construye un árbol BFS con raíz en el proceso marcado
+      como SoyLider''
+
+      1. En la demostración por inducción, la cota de la distancia construida
+         por todas las variables Padre (siendo este una árbol BFS) estaba dada
+         por la ronda \(t\). Donde, en el peor caso, puede ser el diámetro \(D\)
+         de la gráfica. Por lo que la complejidad de tiempo, es \(O(D)\).
+      2. En esa misma demostración, los mensajes BFS están en transito sólo
+         desde procesos a distancia t - 1 del proceso líder. En el paso
+         inductivo se explica como es este comportamiento. Por lo que podemos
+         inferir que la complejidad de mensajes es \(O(m)\).
+      #+end_solution
+
+
+* Tarea 4 (Entrega el 4 de octubre del 2022 a las 23:59) :assignment:unsolved:
+  :properties:
+  :export_file_name: artifacts/tarea-4
+  :export_date: \today
+  :end:
+  #+call: togglesolutions()
+
+  Tus respuestas deben ser claras y concisas. Si entregas tu tarea escrita a
+  mano, que tu escritura sea legible, de otra forma ĺa tarea será descartada.
+
+** Problemas
+
+   1. *(2 puntos)* Describe un algoritmo distribuido basado en \(DFS\) que cuente
+      el número de procesos en un sistema distribuido cuya gráfica \(G\) es
+      arbitraria. Al terminar de contar, debe informar a todos los procesos el
+      resultado del conteo. Muestra que es correcto.
+
+      #+begin_solution
+
+      #+end_solution
+
+   2. *(2 puntos)* Describe un algoritmo distribuido basado en \(DFS\) que, en una
+      gráfica arbitraria \(G\) con \(n\) vértices anónimos, asigne etiquetas
+      únicas en el rango \([1, \ldots, n]\) a los vértices de G. Muestra que es
+      correcto.
+
+      /Hint/: Puedes suponer que cada proceso conoce a sus vecinos aunque estos no
+      tengan una etiqueta explicita.
+
+      #+begin_solution
+
+      #+end_solution
+
+   3. *(2 puntos)* Modifica el algoritmo DFS para que se ejecute en tiempo a los
+      más \(2|V|\) y no mande más de \(2|E|\) mensajes, suponiendo que las
+      aristas son bidireccionales. /Hint/: Cuando un proceso recibe el mensaje
+      \(\langle M\rangle\) por primera vez, este notifica a todos sus vecinos
+      pero envía el mensaje a sólo uno de ellos.
+
+      #+begin_solution
+
+      #+end_solution
+
+   4. *(2 puntos)* Considera el algoritmo ref:alg:coloracion, que calcula una
+      \(\Delta + 1\) coloración, donde \(\Delta\) es el grado máximo en la
+      gráfica. Muestra una gráfica \(G\) con al menos 10 vértices y una
+      asignación de IDs, donde el algoritmo coloree todos los procesos (el
+      primer momento en el que todas las variables \(c\) son distintas de
+      \(\bot\)) en tiempo \(diam(G)\). Muestra otra asignación de IDs para las
+      que el algoritmo coloree en tiempo a los más \(diam(G) / 2\).
+
+      #+attr_latex: :options [caption=\(\Delta + 1\) coloración, label=alg:coloracion]
+      #+begin_lstlisting
+      Algoritmo coloring(ID):
+        src_latex{$c = \bot$}
+
+        Ejecutar inicialmente:
+          send(src_latex{$\langle ID, c\rangle$})
+
+        Al tener todos los mensajes de todos mis vecinos en src_latex{$t \ge
+        1$}:
+          src_latex{$Mensajes = \langle ID_1, c_1\rangle, \ldots \langle ID_j,
+        c_j\rangle$} \(j\) = grado maximo en la grafica
+          src_latex{$A = \{ID_i|c_i = \bot\}$}
+          if src_latex{$c == \bot \wedge ID = \max(A \cup \{ID\})$} then
+            src_latex{$c = \min(\{1, \ldots, \Delta + 1\} \setminus \{c_i
+        \neq \bot\})$}
+          send(src_latex{$\langle ID, c\rangle$}) a todos los vecinos
+      #+end_lstlisting
+
+      #+begin_solution
+
+      #+end_solution
+
+   5. *(2 puntos)* Un toro \(n \times m\) es una versión dos dimensional de un
+      anillo, donde un nodo en la posición \((i, j)\) tiene un vecino hacia el
+      norte en \((i, j - 1)\), al este en \((i + 1, j)\), al sur en \((i, j +
+      1)\) y al oeste en \((i - 1, j)\). Esos valores se calculan módulo \(n\)
+      para la primera coordenada y módulo \(m\) para la segunda; de este modo
+      \((0, 0)\) tiene vecinos \((0, m - 1),\ (1, 0),\ (0, 1) \text{ y } (n - 1,
+      0)\).
+
+      Supongamos que tenemos una red síncrona de paso de mensajes en forma de un
+      toro \(n \times m\), consistente de procesos anónimos idénticos, los
+      cuáles no conocen \(n\), \(m\) o sus propias coordenadas, pero tienen
+      sentido de la dirección (es decir, puede decir cual de sus vecinos está al
+      norte, este, etc.).
+
+      *Pruebe o refute*: Bajo estas condiciones, ¿existe un algoritmo determinista
+      que calcule cuando \(n > m\)?
+
+      #+begin_solution
+
+      #+end_solution
+
+
+* Local variables                                                  :noexport:
+# Local variables:
+# org-export-initial-scope: buffer
+# eval: (add-hook 'before-save-hook (lambda () (org-babel-ref-resolve "process-export-filenames")))
+# eval: (org-babel-ref-resolve "export-setup")
+# eval: (org-babel-ref-resolve "skeletons")
+# End:

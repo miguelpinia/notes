@@ -1,0 +1,1369 @@
+#+title: Cómputo Distribuido
+#+author: Miguel Piña
+#+date: \today
+
+* Setup                                                            :noexport:
+
+** Startup
+
+   #+startup: noptag overview hideblocks
+   #+language: es
+   #+OPTIONS: -:nil
+
+** Org LaTeX Setup
+
+   #+latex_class: tufte-book
+   #+latex_class_options: [openany, a4paper]
+   #+latex_header: \usepackage{amsmath,amssymb,amsthm,geometry,hyperref,paralist,svg,thmtools,tikz,tikz-cd}
+   #+latex_header: \usepackage[AUTO]{babel}
+   #+latex_header: \usepackage{mathtools}
+   #+latex_header: \usepackage[capitalise,noabbrev]{cleveref}
+   #+latex_header: \usepackage{environ} \NewEnviron{abmn}{\marginnote{\BODY}}
+   #+latex_header: \usepackage{url}
+   #+latex_header: \usepackage{color}
+   #+latex_header: \usepackage{listings,chngcntr}% http://ctan.org/pkg/listings
+   #+latex_header: \lstset{ basicstyle=\ttfamily, mathescape=true, frame=Trbl, numbers=left}
+   #+latex_header: \renewcommand{\thelstlisting}{\thesection.\arabic{lstlisting}}
+   #+latex_header: \renewcommand{\lstlistingname}{Pseudocódigo}
+   #+latex_header: \counterwithin{lstlisting}{section}
+   #+latex_header: \setcounter{tocdepth}{1}
+   #+latex_header: \theoremstyle{plain}
+   #+latex_header: \newtheorem{theorem}{Teorema}
+   #+latex_header: \newtheorem{corollary}[theorem]{Corolario}
+   #+latex_header: \newtheorem{proposition}[theorem]{Proposición}
+   #+latex_header: \newtheorem{definition}[theorem]{Definición}
+   #+latex_header: \newtheorem{lemma}[theorem]{Lema}
+   #+latex_header: \newtheorem{affirmation}[theorem]{Afirmación}
+   #+latex_header: \theoremstyle{example}
+   #+latex_header: \newtheorem{example}{Ejemplo}
+   #+latex_header: \newtheorem{exmpl}{Ejemplo}
+   #+latex_header: \theoremstyle{note}
+   #+latex_header: \newtheorem{note}{Nota}
+   #+latex_header: \theoremstyle{remark}
+   #+latex_header: \newtheorem{remark}{Observación}
+   #+latex_header: \theoremstyle{exercise}
+   #+latex_header: \newtheorem{exercise}{Ejercicio}
+   #+latex_header: \usetikzlibrary{arrows,automata,positioning}
+
+** Export settings
+
+   Export into the artifacts directory
+   #+export_file_name: artifacts/comp_dist_notes
+
+   Add ~tufte-book~ to ~org-latex-classes~ and update ~org-latex-pdf-process~.
+
+   #+name: export-setup
+   #+begin_src emacs-lisp :export results :resuts silent :var this-year="2022"
+     (add-to-list 'org-latex-classes
+                  `("tufte-book"
+                    ,(string-join
+                      '("\\documentclass{tufte-book}"
+                        "\\usepackage{color}"
+                        "\\usepackage{amsmath,amssymb}")
+                      "\n")
+                    ("\\chapter{%s}" . "\\chapter*{%s}")
+                    ("\\section{%s}" . "\\section*{%s}")
+                    ("\\subsection{%s}" . "\\subsection*{%s}")
+                    ("\\paragraph{%s}" . "\\paragraph*{%s}")
+                    ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+     (setq-local org-latex-pdf-process
+                 (let ((cmd (concat "pdflatex -shell-escape -interaction nonstopmode"
+                                    " --synctex=1"
+                                    " -output-directory %o %f")))
+                   (list "cp refs.bib %o/"
+                         cmd
+                         cmd
+                         "cd %o; if test -r %b.idx; then makeindex %b.idx; fi"
+                         "cd %o; bibtex %b"
+                         cmd
+                         cmd
+                         "mv *.svg %o/"
+                         "rm -rf %o/svg-inkscape"
+                         "mv svg-inkscape %o/"
+                         "rm -rf *.{aux,bbl,blg,fls,out,log,toc}"
+                         (concat "cp %o/%b.pdf docs/" this-year "/notes-distributed.pdf")))
+                 org-latex-subtitle-format "\\\\\\medskip\\noindent\\Huge %s"
+                 org-confirm-babel-evaluate nil)
+   #+end_src
+
+   #+RESULTS: export-setup
+
+* Introducción
+
+  #+begin_quote
+  "A distributed system is one in which the failure of a computer you didn't
+  even know existed can render your own computer unusable".
+
+   - Leslie Lamport
+  #+end_quote
+
+** Introducción
+
+   *Vientos de cambio:* Uno de los retos más difíciles es mejorar el diseño de
+   sistemas que se puedan comunicar entre sí. En particular buscamos:
+
+   - Inventar aplicaciones que tomen ventaja de estas mejoras en el diseño.
+   - Cambios fundamentales en la arquitectura de computadoras que expandan la
+     arena de las comunicaciones.
+   - Entender de una mejor forma que la concurrencia y la sincronización son
+     problemas fundamentales para redes de computadoras y sistemas multi-core.
+   - Internet no podría existir sin protocolos de sincronización, las bases de
+     datos serían impensables y los sistemas operativos fallarían con mucha
+     frecuencia.
+
+
+** Resultados de imposibilidad
+
+
+* Construcciones básicas
+
+** Definiciones
+
+   - Procesos :: Un sistema distribuido está hecho de una colección de unidades
+     de cómputo, cada uno de ellas abstraída a través de la noción de
+     \(proceso\). Se asume que los procesos cooperan en resolver un problema en
+     común a través del intercambio de información de una forma u otra.
+
+     El conjunto de procesos es estático, está compuesto de \(n\) procesos y el
+     conjunto está denotado cómo \(\Pi = \{p_1,\ \ldots,\ p_n\}\), donde cada
+     \(p_i\) representa un proceso distinto. Cada proceso \(p_i\) es secuencial.
+
+   - Medio de comunicación :: Los procesos se comunican al enviar y recibir
+     /mensajes/ a través de /canales/. Se asume que cada canal es confiable (no
+     crea, modifica o duplica mensajes). En algunos casos, asumiremos que los
+     canales son /FIFO/ (first-in, first-out). Cada canal puede ser bidirectional
+     y tiene capacidad infinita (puede contener cualquier número de mensajes,
+     cada uno de cualquier tamaño). Cada proceso \(p_i\) tiene un conjunto de
+     vecinos, denotado \(neighbors_i\).
+
+   - Vista estructural :: Podemos observar, qué, desde un punto de vista
+     estructural, el sistema puede ser representado por una gráfica conexa no
+     dirigida \(G = (V, E)\). Inicialmente, nos interesarán para nuestro
+     estudio, tres tipos de gráficas:
+
+     1. /Anillos/. Un anillo es una gráfica en la cuál cada proceso tiene
+        exactamente dos vecinos, con los que puede comunicarse directamente, un
+        vecino izquierdo y un vecino derecho.
+
+     2. /Árbol/. Es una gráfica que tiene dos propiedades muy notables: es
+        acíclica y conectada.
+
+     3. /La gráfica completa/. Es una gráfica en la cuál cada proceso está
+        directamente conectada a cualquier otro proceso. (En terminología de
+        grafos, a tal gráfica se le llama cliqué).
+
+   - Algoritmo distribuido :: Es una colección de \(n\) autómatas, uno por
+     proceso. Un autómata describe la secuencia de pasos ejecutados por el
+     proceso correspondiente.
+
+     Adicional al poder de una máquina de Turing, un autómata es enriquecido con
+     dos operaciones de comunicación que permite enviar y recibir un mensaje en
+     cualquier canal. Estas operaciones son ~send()~ y ~receive()~.
+
+   - Algoritmo síncrono :: Es un algoritmo diseñado para ser ejecutado en un
+     sistema distribuido síncrono. El progreso de tal sistema es gobernado por
+     un reloj externo y los procesos colectivamente ejecutan un /secuencia de
+     rondas/, donde cada ronda corresponde a un valor del reloj global.
+
+     Durante una ronda, un proceso envía a lo más un mensaje a cada uno de sus
+     vecinos. La propiedad fundamental de un sistema síncrono, es que un mensaje
+     enviado por un proceso durante una ronda \(r\), es recibido por su proceso
+     de destino durante la misma ronda \(r\). De este modo, cuando un proceso
+     avanza a la ronda \(r + 1\), él ha recibido y procesado todos los mensajes
+     que hayan sido enviados durante la ronda \(r\).
+
+   - Diagrama espacio-tiempo :: Una ejecución distribuida puede ser gráficamente
+     representada por lo que se conoce como diagrama espacio/tiempo. El tiempo
+     para cada proceso puede ser representado por una flecha de izquierda a
+     derecha, y un mensaje por otra flecha desde un proceso emisor a un proceso
+     receptor.
+
+
+** Algoritmos básicos y notación
+
+
+*** Algoritmo de los generales
+
+    Descripción
+
+*** Algoritmo de la cadena
+
+    Descripción
+
+
+** Broadcast y convergecast
+
+   Dos problemas frecuentes en computación distribuida son =broadcast= y
+   =convergecast=. Estos dos problemas son definidos respecto a un proceso
+   distinguido \(p_i\).
+
+   - Broadcast :: El problema del broadcast es un problema de comunicación uno a
+     muchos. Consiste en diseñar algoritmos que permitan que un proceso
+     distinguido \(p_i\) disemine información a un conjunto de proceso.
+   - Convergecast :: Es un problema de comunicación muchos a uno. Consiste en
+     diseñar algoritmos que permita que cada proceso \(p_j\) envíe información
+     \(v_j\) a un proceso distinguido \(p_i\) para computar alguna función
+     \(f(v)\), la cuál procese un vector \(v = [v_1,\ \ldots,\ v_n]\) donde cada
+     entrada es un valor por proceso.
+
+
+** Algoritmo de Inundamiento (Flooding)
+
+   Una de las formas más simples de implementar /broadcasting/ es utilizando el
+   algoritmo de flooding. Este algoritmo es muy simple y fácil de implementar
+   como podemos observar en el algoritmo [[ref:alg:flooding]].
+
+   #+attr_latex: :options [caption=Algoritmo de Inundamiento, label=alg:flooding]
+   #+begin_lstlisting
+
+   #+end_lstlisting
+
+   #+begin_src python :eval no
+     Algoritmo Flood(ID, Lider, M):
+         flag = False
+         Ejecutar inicialmente:
+             if ID == Lider:
+                 flag = True
+                 send(<M>) por todos los puertos
+
+         Al recibir <M> por algún puerto:
+             if not flag:
+                 flag = True
+                 send(<M>) por todos los puertos
+   #+end_src
+
+   La idea es que cuando un proceso reciba un mensaje \(M\), este lo reenvíe a
+   todos sus vecinos, a menos que ya haya visto el mensaje previamente. Este
+   seguimiento del mensaje lo realiza utilizando un /bit/. Este algoritmo lo
+   probaremos en la gráfica cref:ex:graph. El nodo inicial es marcado de forma
+   distinta a los demás para distinguirlo en la ejecución. En la primera ronda
+   podemos observar como el nodo distinguido \(q_0\), comienza transmitiendo su
+   mensaje a sus vecinos \(q_1\) y \(q_2\) como lo observamos en el
+   cref:ex:round1.
+
+   #+begin_abmn
+   #+begin_remark
+   - Sistema síncrono :: Los procesos se ejecutan a la misma velocidad y los
+     mensajes llegan de un proceso a otro en una unidad de tiempo.
+   - Localidad :: Inicialmente los procesos tienen una vista local del sistema.
+   #+end_remark
+   #+end_abmn
+
+   Para la segunda ronda, ahora los vecinos de los vecinos de
+   \(q_0\) comienzan a desplegar los mensajes como se observa en
+   cref:ex:round2. Y así continuamos con el /broadcasting/ del mensaje \(M\) como
+   se observa en el cref:ex:round3.
+
+
+    #+begin_exmpl
+    label:ex:graph
+    Consideremos la siguiente gráfica, donde el proceso distinguido es \(q_0\),
+    es decir, es el proceso líder:
+    \begin{center}
+      \begin{tikzpicture}[node distance=1.5cm]
+        \node[state, accepting] (q0) {$q_0$};
+        \node[state] (q1) [above of=q0] {$q_1$};
+        \node[state] (q2) [below of=q0] {$q_2$};
+        \node[state] (q5) [left of=q0] {$q_5$};
+        \node[state] (q4) [above of=q5] {$q_4$};
+        \node[state] (q3) [above of=q4] {$q_3$};
+        \node[state] (q6) [below of=q5] {$q_6$};
+        \node[state] (q7) [right of=q1] {$q_7$};
+        \node[state] (q8) [above of=q7] {$q_7$};
+        \node[state] (q9) [below of=q7] {$q_9$};
+        \node[state] (q10) [right of=q9] {$q_{10}$};
+        \node[state] (q11) [below right of=q9] {$q_{11}$};
+        \path[-]
+        (q0) edge node{} (q1)
+        (q0) edge node{} (q2)
+        (q1) edge node{} (q4)
+        (q1) edge node{} (q3)
+        (q3) edge node{} (q4)
+        (q1) edge node{} (q5)
+        (q2) edge node{} (q6)
+        (q1) edge node{} (q7)
+        (q7) edge node{} (q8)
+        (q7) edge node{} (q9)
+        (q9) edge node{} (q10)
+        (q9) edge node{} (q11)
+        (q10) edge node{} (q11);
+      \end{tikzpicture}
+    \end{center}
+
+    #+end_exmpl
+
+    #+begin_exmpl
+    label:ex:round1
+    En la primera ronda, podemos observar como se va propagando los mensajes.
+
+    \begin{center}
+      \begin{tikzpicture}[node distance=1.5cm]
+        \node[state, accepting] (q0) {$q_0$};
+        \node[state] (q1) [above of=q0] {$q_1$};
+        \node[state] (q2) [below of=q0] {$q_2$};
+        \node[state] (q5) [left of=q0] {$q_5$};
+        \node[state] (q4) [above of=q5] {$q_4$};
+        \node[state] (q3) [above of=q4] {$q_3$};
+        \node[state] (q6) [below of=q5] {$q_6$};
+        \node[state] (q7) [right of=q1] {$q_7$};
+        \node[state] (q8) [above of=q7] {$q_8$};
+        \node[state] (q9) [below of=q7] {$q_9$};
+        \node[state] (q10) [right of=q9] {$q_{10}$};
+        \node[state] (q11) [below right of=q9] {$q_{11}$};
+        \path[-to]
+        (q0) edge[style=red, line width=1.3pt] node{} (q1)
+        (q0) edge[style=red, line width=1.3pt] node{} (q2);
+        \path[-]
+        (q1) edge node{} (q4)
+        (q1) edge node{} (q3)
+        (q3) edge node{} (q4)
+        (q1) edge node{} (q5)
+        (q2) edge node{} (q6)
+        (q1) edge node{} (q7)
+        (q7) edge node{} (q8)
+        (q7) edge node{} (q9)
+        (q9) edge node{} (q10)
+        (q9) edge node{} (q11)
+        (q10) edge node{} (q11);
+      \end{tikzpicture}
+    \end{center}
+    #+end_exmpl
+
+    #+begin_exmpl
+    label:ex:round2
+    En la segunda ronda se distribuye el mensaje a través de los vecinos de los
+    vecinos:
+
+    \begin{center}
+      \begin{tikzpicture}[node distance=1.5cm]
+        \node[state, accepting] (q0) {$q_0$};
+        \node[state] (q1) [above of=q0] {$q_1$};
+        \node[state] (q2) [below of=q0] {$q_2$};
+        \node[state] (q5) [left of=q0] {$q_5$};
+        \node[state] (q4) [above of=q5] {$q_4$};
+        \node[state] (q3) [above of=q4] {$q_3$};
+        \node[state] (q6) [below of=q5] {$q_6$};
+        \node[state] (q7) [right of=q1] {$q_7$};
+        \node[state] (q8) [above of=q7] {$q_8$};
+        \node[state] (q9) [below of=q7] {$q_9$};
+        \node[state] (q10) [right of=q9] {$q_{10}$};
+        \node[state] (q11) [below right of=q9] {$q_{11}$};
+        \path[-to]
+        (q0) edge[style=red, line width=1.3pt] node{} (q1)
+        (q0) edge[style=red, line width=1.3pt] node{} (q2)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q4)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q3)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q5)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q7)
+        (q2) edge[style=blue, line width=1.3pt] node{} (q6);
+        \path[-]
+        (q3) edge node{} (q4)
+        (q7) edge node{} (q8)
+        (q7) edge node{} (q9)
+        (q9) edge node{} (q10)
+        (q9) edge node{} (q11)
+        (q10) edge node{} (q11);
+      \end{tikzpicture}
+    \end{center}
+    #+end_exmpl
+
+    #+begin_exmpl
+    label:ex:round3
+    En la tercera ronda observamos:
+
+    \begin{center}
+      \begin{tikzpicture}[node distance=1.5cm]
+        \node[state, accepting] (q0) {$q_0$};
+        \node[state] (q1) [above of=q0] {$q_1$};
+        \node[state] (q2) [below of=q0] {$q_2$};
+        \node[state] (q5) [left of=q0] {$q_5$};
+        \node[state] (q4) [above of=q5] {$q_4$};
+        \node[state] (q3) [above of=q4] {$q_3$};
+        \node[state] (q6) [below of=q5] {$q_6$};
+        \node[state] (q7) [right of=q1] {$q_7$};
+        \node[state] (q8) [above of=q7] {$q_8$};
+        \node[state] (q9) [below of=q7] {$q_9$};
+        \node[state] (q10) [right of=q9] {$q_{10}$};
+        \node[state] (q11) [below right of=q9] {$q_{11}$};
+        \path[-to]
+        (q0) edge[style=red, line width=1.3pt] node{} (q1)
+        (q0) edge[style=red, line width=1.3pt] node{} (q2)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q4)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q3)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q5)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q7)
+        (q2) edge[style=blue, line width=1.3pt] node{} (q6)
+        (q3) edge[style=green, line width=1.3pt] node{} (q4)
+        (q3) edge[style=green, line width=1.3pt] node{} (q1)
+        (q4) edge[style=green, line width=1.3pt] node{} (q3)
+        (q4) edge[style=green, line width=1.3pt] node{} (q1)
+        (q7) edge[style=green, line width=1.3pt] node{} (q8)
+        (q7) edge[style=green, line width=1.3pt] node{} (q1)
+        (q7) edge[style=green, line width=1.3pt] node{} (q9);
+        \path[-]
+        (q9) edge node{} (q10)
+        (q9) edge node{} (q11)
+        (q10) edge node{} (q11);
+      \end{tikzpicture}
+    \end{center}
+    #+end_exmpl
+
+
+** Medidas de complejidad
+
+   Vamos a medir la complejidad de nuestros algoritmos basándonos en dos tipos
+   de medidas: El tiempo y la cantidad de mensajes.
+
+   #+begin_abmn
+   #+begin_remark
+   \begin{enumerate}
+     \item Desestimamoms el tiempo de computación local. Asumimos que sucede instantáneamente.
+     \item En la complejidad de mensajes, también es importante pensar en el tamaño de los mensajes, es decir, ¿Cuántos bits se enviaron?, ¿El canal de comunicación tiene un límite en el ancho de banda?
+   \end{enumerate}
+   #+end_remark
+   #+end_abmn
+
+   1. Complejidad de tiempo: Es el tiempo del último evento. Generalmente es el
+      número de rondas hasta que un protocolo termine.
+   2. Complejidad de mensajes: Es el número total de mensajes enviados.
+
+   Regresando al algoritmo de Flooding, podemos enunciar el siguiente teorema:
+
+   #+begin_theorem
+   Todo proceso recibe el mensaje \(M\) en a los más tiempo \(D\) y a lo más
+   \(2|E|\) mensajes, donde \(D\) es el tamaño de la gráfica y \(E\) es el
+   conjunto de aristas. Asumimos que la gráfica es conexa.
+   #+begin_abmn
+   #+begin_remark
+   1. La distancia entre 2 vértices en una gráfica \(G\), denotado como \(d(u,
+      v)\), es la longitud del camino más corto entre ellos.
+   2. El diámetro de una gráfica \(G\), denotado como \(diam(G)\) es
+       \(\max\limits_{\forall u, v \in G} d_G(u, v)\)
+   #+end_remark
+   #+end_abmn
+   #+end_theorem
+
+   #+begin_proof
+   /Complejidad de los mensajes:/
+
+   Cada proceso sólo envía una copia de \(M\) a sus vecinos, así que cada
+   arista transporta a lo más una copia de \(M\). Por lo que a lo más la
+   cantidad de mensajes enviados es \(2|E|\).
+
+   /Complejidad de tiempo:/
+
+   Por inducción en la distancia del líder a los demás:
+
+   - Caso base :: \(d = 0 \rightarrow\) El líder es el único proceso en el
+     sistema, el cuál claramente, tiene el mensaje \(M\) en el tiempo cero.
+   - Hip. de ind. :: En el tiempo de \(d - 1\), todos los que están a distancia
+     \(d - 1\) del líder, reciben a \(M\).
+   - Paso ind. :: Sea d la distancia del líder a un proceso \(v\). Entonces
+     \(v\) tiene un vecino \(u\), tal que \(d(u, líder) = d - 1\). Por
+     hipótesis de inducción, \(u\) recibe el mensaje \(M\) en un tiempo no
+     menor a \(d - 1\). A partir del código, observamos que \(u\) envía el
+     mensaje \(M\) a todos sus vecinos, incluyendo \(v\), por lo que \(M\)
+     llega a \(v\) en un tiempo no menor a \((d - 1) + 1 = d\).
+   #+end_proof
+
+
+   #+begin_corollary
+   \label{cor:diam}
+   Todo proceso recibe \(M\) en tiempo a lo más el diámetro
+   \(diam(G)\).
+   #+begin_abmn
+     \begin{exercise}
+       Demostrar el corolario \ref{cor:diam}
+     \end{exercise}
+   #+end_abmn
+   #+end_corollary
+
+   #+begin_abmn
+     #+begin_remark
+       En computación distribuida, *desestimamos el tiempo de cómputo
+       local*. Particularmente pensamos que *sucede instantáneamente*.
+     #+end_remark
+   #+end_abmn
+
+   El algoritmo de /flooding/ no es muy eficiente, ya que utiliza \(2|E|\)
+   mensajes (con \(E\) el número de canales/aristas) para diseminar un mensaje
+   en sistema modelado como una gráfica.
+
+   Una forma de mejorar este algoritmo es utilizar de forma subyacente un árbol
+   generador enraizado en el proceso distinguido \(p_i\).
+
+   #+begin_exmpl
+   label:ex:tree
+   Árbol
+   \begin{center}
+     \begin{tikzpicture}[node distance=1.5cm]
+       \node[state] (q0) {$q_0$};
+       \node[state] (q1) [above of=q0] {$q_1$};
+       \node[state] (q2) [below of=q0] {$q_2$};
+       \node[state] (q5) [left of=q0] {$q_5$};
+       \node[state] (q4) [above of=q5] {$q_4$};
+       \node[state] (q3) [above of=q4] {$q_3$};
+       \node[state] (q6) [below of=q5] {$q_6$};
+       \node[state] (q7) [right of=q1] {$q_7$};
+       \node[state] (q8) [above of=q7] {$q_7$};
+       \node[state] (q9) [below of=q7] {$q_9$};
+       \node[state] (q10) [right of=q9] {$q_{10}$};
+       \node[state] (q11) [below right of=q9] {$q_{11}$};
+       \path[-]
+       (q0) edge node{} (q1)
+       (q0) edge node{} (q2)
+       (q1) edge node{} (q4)
+       (q1) edge node{} (q3)
+       (q1) edge node{} (q5)
+       (q2) edge node{} (q6)
+       (q1) edge node{} (q7)
+       (q7) edge node{} (q8)
+       (q7) edge node{} (q9)
+       (q9) edge node{} (q10)
+       (q9) edge node{} (q11);
+     \end{tikzpicture}
+   \end{center}
+   #+end_exmpl
+
+   #+begin_exmpl
+   label:ex:spanningTree
+   Árbol generador con proceso distinguido \(q_0\).
+   \begin{center}
+     \begin{tikzpicture}[node distance=1.5cm]
+       \node[state, accepting] (q0) {$q_0$};
+       \node[state] (q1) [above of=q0] {$q_1$};
+       \node[state] (q2) [below of=q0] {$q_2$};
+       \node[state] (q5) [left of=q0] {$q_5$};
+       \node[state] (q4) [above of=q5] {$q_4$};
+       \node[state] (q3) [above of=q4] {$q_3$};
+       \node[state] (q6) [below of=q5] {$q_6$};
+       \node[state] (q7) [right of=q1] {$q_7$};
+       \node[state] (q8) [above of=q7] {$q_7$};
+       \node[state] (q9) [below of=q7] {$q_9$};
+       \node[state] (q10) [right of=q9] {$q_{10}$};
+       \node[state] (q11) [below right of=q9] {$q_{11}$};
+       \path[-]
+       (q0) edge[style=red, line width=1.5pt] node{} (q1)
+       (q0) edge[style=red, line width=1.5pt] node{} (q2)
+       (q1) edge[style=red, line width=1.5pt] node{} (q4)
+       (q1) edge[style=red, line width=1.5pt] node{} (q3)
+       (q1) edge[style=red, line width=1.5pt] node{} (q5)
+       (q2) edge[style=red, line width=1.5pt] node{} (q6)
+       (q1) edge[style=red, line width=1.5pt] node{} (q7)
+       (q7) edge[style=red, line width=1.5pt] node{} (q8)
+       (q7) edge[style=red, line width=1.5pt] node{} (q9)
+       (q9) edge[style=red, line width=1.5pt] node{} (q10)
+       (q9) edge[style=red, line width=1.5pt] node{} (q11)
+       (q3) edge node{} (q4)
+       (q10) edge node{} (q11);
+     \end{tikzpicture}
+   \end{center}
+  #+end_exmpl
+
+
+** Árboles generadores
+
+   Un pequeño recordatorio de definiciones sobre árboles.
+
+   - Árbol :: Gráfica conexa sin ciclos. [[cref:ex:tree]].
+   - Árbol generador :: subgráfica que toca todos los vértices en una gráfica G
+     y es un árbol. [[cref:ex:spanningTree]].
+   - Árbol con raíz :: Árbol con un vértice distinguido, la raíz. Cada proceso
+     \(p_i\) tiene un sólo padre, localmente denotado como \(parent_i\) y un
+     conjunto (posiblemente vacío) de hijos, denotado como \(children_i\). El
+     padre del nodo distinguido es el mismo. [[cref:ex:spanningTree]].
+
+   Modifiquemos el algoritmo de ~Flooding~ para construir un árbol
+   generador. Es fácil probar que este algoritmo tiene las mismas propiedades
+   que el algoritmo de ~Flooding~.
+
+   #+begin_example
+   Algoritmo BuildSpanningTree(ID, root, M):
+       Parent = null
+       Ejecutar inicialmente:
+           if ID == root:
+               Parent = null
+               send(<M>) por todos los puertos
+       Al recibir <M> por algún puerto P:
+           if Parent == \(\bot\):
+               Parent = P
+               send(<M>) por todos los puertos
+   #+end_example
+
+   Podemos observar que el algoritmo ~BuildSpanningTree~ tiene una propiedad
+   adicional, cuando el algoritmo se queda *quieto* (quiescent state), es decir,
+   ya no se envían mensajes, el conjunto de todos los /Parents/ forma un árbol
+   generador enraízado.
+
+   #+begin_lemma
+   En cualquier momento de la ejecución del algoritmo ~BuildSpanningTree~, las
+   siguientes invariantes se mantienen:
+
+   1. Si \(u.parent \neq \bot\), entonces, \(u.parent.parent \neq \bot\) y los
+      siguientes padres forma un camino desde \(u\) hasta \(root\).
+   2. Si hay un mensaje \(M\) en tránsito de \(u\) a \(v\), entonces \(u.parent
+      \neq \bot\).
+   #+end_lemma
+
+   #+begin_proof
+   Tenemos que mostrar que las invariantes son verdaderas y para cualquier
+   evento, se preservan dichas invariantes. Asumiremos que todos los eventos
+   entregan un mensaje. La demostración la haremos sobre inducción sobre el
+   camino formado por los padres \(parents\).
+
+   Consideraremos la configuración inicial como el resultado de establecer el
+   padre de \(root\) a sí mismo y enviando mensajes a todos sus vecinos.
+
+   Para un evento de entrega, sea \(v\) recibiendo \(M\) de u. Hay dos casos,
+   si \(v.parent\) es /non-null/, el único cambio de estado es que M ya no estará
+   más en tránsito, así que no nos preocupamos por \(u.parent\) más. Si
+   \(v.parent\) es /null/, entonces:
+
+   1. \(v.parent\) es establecido a u. Esto dispara el primer invariante. Por
+      hipótesis de inducción, tenemos que \(u.parent \neq \bot\) y que existe un
+      camino de u a la raíz \(root\). Entonces \(v.parent.parent = u.parent
+      \neq \bot\) y el camino de \(v \rightarrow u \rightarrow root\) da el
+      camino desde \(v\) a la raíz.
+   2. El mensaje \(M\) es enviado a todos los vecinos de \(v\). Como \(M\) está
+      en transito desde \(v\), necesitamos que \(v.parent \neq \bot\); pero
+      como lo acabamos de establecer a \(u\), pues ya estamos.
+   #+end_proof
+
+   Al final del algoritmo, la invariante muestra que todo proceso tiene un
+   camino hacia la raíz, es decir, que la gráfica representada por los
+   apuntadores de los padres (parents) está conectada. Dada que esta gráfica
+   tiene exactamente \(|V| - 1\) aristas (sin contar el /auto-loop/ en la raíz),
+   es un árbol.
+
+   Y aunque obtuvimos un árbol generador al final, podríamos no obtener un buen
+   árbol generador. Por ejemplo, suponga que nuestro amigo el *adversario*, toma
+   algún camino Hamiltoniano a través de la red y entrega mensajes a través de
+   su camino muy rápido mientras retrasa todos los demás mensajes utilizando la
+   unidad de tiempo permitida de forma completa. Entonces, el árbol generador
+   va a tener profundidad \(|V| - 1\), la cuál podría ser mucho peor que
+   \(D\). Esto abre paso a que busquemos construir árboles generadores con la
+   profundidad mínima posible, entonces necesitaremos hacer cosas más
+   sofisticadas.
+
+   *Estructura de árbol distribuido*
+
+   \(\forall\) proceso \(\in G\):
+
+   1. Tiene una variable (\(soyRaiz\)) que indica si es la raíz del árbol.
+   2. Tiene una variable \(PADRE\) que indica el puerto que conecta con su
+      padre.
+   3. Tiene un conjunto \(HIJOS\) con todos los puertos que conectan a sus
+      hijos en el árbol.
+
+   #+begin_abmn
+   Formato en que un proceso almacena información
+
+   Proceso {
+     PADRE: 10,
+     HIJOS: {6, 5},
+     soyRaiz: false
+   }
+   #+end_abmn
+
+   Dado un árbol \(T\) con \(raíz\):
+
+   1. Profundidad de un nodo \(v\): distancia de la \(raíz\) a \(v\).
+   2. Profundidad de \(T\): máximo de las profundidades.
+   3. Altura de \(v\): distancia de \(v\) a sus hojas.
+   4. Altura de \(T\): máximo de las alturas.
+
+
+** Broadcast
+
+   Regresando al problema inicial de /broadcasting/, diseñamos un algoritmo que
+   nos permita diseminar algún mensaje \(<M>\). Para ello, supondremos que
+   sobre la gráfica que modela nuestro sistema, ya construimos un árbol
+   generador.
+
+   #+begin_abmn
+   #+begin_remark
+     Flooding
+       + Tiempo(Flooding) \(\le diam(G)\)
+       + Mensajes \(\le 2|E|\)
+     BroadcastTree
+       + Tiempo(BroadcastTree) \(= Prof(T)\)
+       + Mensajes \(= |V| - 1\)
+   #+end_remark
+   #+end_abmn
+
+   #+begin_abmn
+   #+begin_exercise
+   ¿Cuál sería el peor caso en complejidad de tiempo para el algoritmo
+   ~BroadcastTree~? Explica detalladamente.
+   #+end_exercise
+   #+end_abmn
+
+   #+begin_example
+   Algoritmo BroadcastTree(ID, soyRaiz, M):
+       PADRE, HIJOS
+
+       Ejecutar inicialmente:
+           if soyRaiz:
+               send(<M>) a todos los HIJOS
+       Al recibir <M> de PADRE:
+           send(<M>) a todos los HIJOS
+   #+end_example
+
+   #+begin_exmpl
+    label:ex:broadcastexec
+    Ejemplo de ejecución de BroadcastTree, cada ronda está coloreada de un color
+    distinto.
+
+    Ronda 1: \(\textcolor{red}{\rightarrow}\), ronda 2:
+    \(\textcolor{blue}{\rightarrow}\), ronda 3:
+    \(\textcolor{violet}{\rightarrow}\), ronda 4:
+    \(\textcolor{orange}{\rightarrow}\).
+
+    \begin{center}
+      \begin{tikzpicture}[node distance=1.5cm]
+        \node[state, accepting] (q0) {$q_0$};
+        \node[state] (q1) [above of=q0] {$q_1$};
+        \node[state] (q2) [below of=q0] {$q_2$};
+        \node[state] (q5) [left of=q0] {$q_5$};
+        \node[state] (q4) [above of=q5] {$q_4$};
+        \node[state] (q3) [above of=q4] {$q_3$};
+        \node[state] (q6) [below of=q5] {$q_6$};
+        \node[state] (q7) [right of=q1] {$q_7$};
+        \node[state] (q8) [above of=q7] {$q_8$};
+        \node[state] (q9) [below of=q7] {$q_9$};
+        \node[state] (q10) [right of=q9] {$q_{10}$};
+        \node[state] (q11) [below right of=q9] {$q_{11}$};
+        \path[-to]
+        (q0) edge[style=red, line width=1.3pt] node{} (q1)
+        (q0) edge[style=red, line width=1.3pt] node{} (q2)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q4)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q3)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q5)
+        (q1) edge[style=blue, line width=1.3pt] node{} (q7)
+        (q2) edge[style=blue, line width=1.3pt] node{} (q6)
+        (q7) edge[style=violet, line width=1.3pt] node{} (q8)
+        (q7) edge[style=violet, line width=1.3pt] node{} (q9)
+        (q9) edge[style=orange, line width=1.3pt] node{} (q10)
+        (q9) edge[style=orange, line width=1.3pt] node{} (q11);
+        \path[-]
+        (q4) edge node{} (q3)
+        (q10) edge node{} (q11);
+      \end{tikzpicture}
+    \end{center}
+    #+end_exmpl
+
+
+** ConvergeCast
+
+   Proceso dual al broadcast. Ahora los proceso tienen que enviar información a
+   la raíz.
+
+   #+begin_abmn
+   #+begin_remark
+     Proponemos una solución que utiliza una técnica de agregación para el uso
+     de convergecast.
+
+     - Tiempo(Convergecast) \(= Prof(T)\)
+     - Mensajes \(|V| - 1\)
+   #+end_remark
+   #+end_abmn
+
+   #+begin_example
+   Algoritmo Convercast(ID, soyRaiz):
+       PADRE, HIJOS, noRecibidos = 0
+
+       Ejecutar inicialmente:
+           if |HIJOS| == 0:
+           send(<ok>) a PADRE
+
+       Al recibir <ok> de algun puerto en HIJOS:
+           noRecibidos++
+           if noRecibidos == |HIJOS|:
+               send(<ok>) a PADRE
+   #+end_example
+
+
+** Broadconvergecast
+
+   Ahora queremos combinar ambas técnicas, de modo que podamos construir un
+   árbol generador. Otras formas de llamar a este algoritmo es /propagación de
+   información con retroalimentación/. Una vez construido el árbol generador,
+   este puede ser utilizado para futuras invocaciones de broadcast y
+   convergecast utilizando el mismo proceso distinguido \(p_a\).
+
+   #+begin_abmn
+   #+begin_remark
+   Algunos de los protocolos de red que se inspiran en broadcasting y
+   convergecast son:
+
+   \begin{itemize}
+     \item DNS / DNS Caching
+     \item DHCP
+     \item ARP
+   \end{itemize}
+
+   Más información en el libro de "Computer Networking" de James F. Kurose, Keit
+   W. Ross, 8ed. secciones 2.4, 6.4 y 6.7.
+   #+end_remark
+   #+end_abmn
+
+   #+begin_example
+   Algoritmo BroadConvergeCast(ID, SoyRaiz):
+       PADRE, HIJOS, noVecinos = 0
+
+       Ejecutar inicialmente:
+           if soyRaiz then
+               send(<START>) a todos en HIJOS
+
+       Al recibir <START> de PADRE:
+           if |HIJOS| != 0 then
+               send(<START>) a todos en HIJOS
+           else
+               send(<OK>) a PADRE
+
+       Al recibir <OK> de algún puerto en HIJOS:
+           noVecinos++
+           if noVecinos == |HIJOS| then
+               if soyRaiz then
+                   reportar terminación
+               else
+                   send(<OK>) a PADRE
+   #+end_example
+
+
+  #+begin_lemma
+   \label{lemma:broad}
+   (Broadcast) Todo proceso a profundidad \(D\), recibe \(<START>\) en tiempo
+   \(D\).
+   #+begin_abmn
+     \begin{exercise}
+       Demostrar el lema \ref{lemma:broad}
+     \end{exercise}
+   #+end_abmn
+   #+end_lemma
+
+   #+begin_lemma
+   \label{lemma:conv}
+   (Convergecast) Todo proceso \(p\) a profundidad \(D\), envía su mensaje en
+   tiempo \(D + 2 * altura(p)\).
+   #+begin_abmn
+     \begin{exercise}
+       Demostrar el lema \ref{lemma:conv}
+     \end{exercise}
+   #+end_abmn
+   #+end_lemma
+
+
+
+** Cómputo por agregación
+
+   Una función de agregación es aquella que acepta argumentos y devuelve un
+   único valor escalar que es resultado de una evaluación de un conjunto de
+   valores similares, como los de una columna dentro de una conjunto de una o
+   varias filas.
+
+   En cómputo distribuido buscamos que cada proceso tenga como entrada un valor
+   \(x_i\) y que el sistema distribuido evalúe \(f(x_0,\ \ldots,\ x_i, \ldots,
+   x_n)\) con \(f\) una función de agregación.
+
+   Una pregunta interesante es: ¿Cómo modificamos el algoritmo /BroadConvergeCast/
+   para que nuestro sistema pueda evaluar funciones de agregación? Una opción es
+   que cada proceso implemente una función parcial y añadir una variable de
+   acumulación \(acc\), de modo que en cada respuesta devolvamos una evaluación
+   parcial de nuestros subárboles.
+
+
+   #+begin_example
+   Algoritmo BroadConvergecast(ID, soyRaiz, valor):
+       PADRE, HIJOS, noVecinos = 0, acc = valor
+
+       Ejecutar inicialmente:
+         if soyRaiz then
+           send(<START>) a todos en HIJOS
+
+       Al recibir <§TART> de padre:
+         if |HIJOS| != 0 then
+           send(<START>) a todos en HIJOS
+         else
+           send(<OK, acc>) a PADRE
+
+       Al recibir <OK, ACCUM> de algún puerto en HIJOS:
+         noVecinos++
+         acc = f(acc, ACCUM)
+         if noVecinos == |HIJOS| then
+           if soyRaiz then
+             reportar termino
+             return acc
+           else
+             send(<OK, acc>) a PADRE
+   #+end_example
+
+   ¿Qué tipo de operaciones/funciones podemos utilizar con esta técnica?
+
+   - Sumas
+   - Restas
+   - Multiplicaciones
+   - Máximos
+   - Mínimos
+
+   En la figura [[fig:compAggr]], podemos observar un ejemplo de esta
+   técnica. Para simplificar la ejecución, se asume que la gráfica corresponde
+   al árbol generador de alguna gráfica. En este ejemplo, el proceso con el
+   valor 2, que se encuentra en la parte superior de la figura, corresponde con
+   el proceso distinguido.
+
+   El sistema distribuido ejecutará una suma distribuida. El valor final de la
+   ejecución será 21.
+
+   #+CAPTION: Ejemplo de ejecución de una suma distribuida. Cada proceso tiene un valor de entrada.
+   #+ATTR_LaTeX: scale=0.9\textwidth
+   #+LABEL: fig:compAggr
+   [[./figs/dibujo27.png]]
+
+   #+begin_lemma
+   Cuando un proceso \(p_i\) envía \(<ok, acc>\) a su padre, tenemos que el
+   valor de \(acc\) es igual al valor acumulado de aplicar la función \(f\) a
+   las entradas en el subárbol con raíz en el proceso \(p\).
+   #+end_lemma
+
+   Podemos observar que las complejidades para el algoritmo de
+   broadConvergecastTree es
+
+   - Tiempo \(= 2 * Prof(T)\)
+   - Mensajes \(= 2 * (|V| - 1)\)
+
+
+** Elección de líder
+
+   Cada proceso tiene un ID único. El objetivo es elegir un líder único; todo
+   *eligen al mismo líder*. Existe un proceso que inició con el ID que es el líder
+   al finalizar el algoritmo. Un algoritmo simple para este problema es el
+   siguiente:
+
+
+   #+attr_latex: :options [caption=Algoritmo de elección de líder]
+   #+begin_lstlisting
+   Algoritmo eligeLider(ID, total):
+     Lider = ID, ronda = 0
+
+     Ejecutar en todo momento src_latex{$t \ge\ 0$}:
+       send(<Lider>) a todos los vecinos
+
+     Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
+       Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
+       Lider = max(mensajes)
+       ronda = ronda + 1
+       if ronda == total then
+          terminar algoritmo
+   #+end_lstlisting
+   #+begin_abmn
+   ID \(\in \mathbb{N}\), total = \(|V|\), \(d\) grado del vértice
+   #+end_abmn
+
+   Consideremos la gráfica mostrada en la figura [[fig:graphLider]] y utilizando la
+   gráfica de espacio-tiempo, podemos observar la dinámica del envío de mensajes
+   entre los procesos en la figura [[fig:spaceTimeLeader]]. Podemos observar que
+   conforme avanza el tiempo, la información distribuida entre los procesos
+   comienza a ser cada vez más estable.
+
+   #+CAPTION: Gráfica sobre la que se ejecutará el algoritmo de elección de líder.
+   #+ATTR_LaTeX: scale=0.9\textwidth
+   #+LABEL: fig:graphLider
+   [[./figs/dibujo31.png]]
+
+   #+CAPTION: Dinámica de intercambio de mensajes durante la ejecución del algoritmo de elección de líder.
+   #+ATTR_LaTeX: scale=0.9\textwidth
+   #+LABEL: fig:spaceTimeLeader
+   [[./figs/dibujo32.png]]
+
+
+   Algunas propiedades de los algoritmos de elección de líder son:
+
+   - Acuerdo :: Todos los procesos acuerdan un mismo valor.
+   - Validez :: Al terminar la ejecución del algoritmo, todos los procesos tiene
+     como lider un ID que fue entrada de algún proceso.
+   - Tiempo = \(d\) // Distancia máxima respecto al proceso con ID máximo
+   - Mensajes = \(2*d*|E|\)
+
+   Para probar que este algoritmo es correcto, hay que mostrar se cumple el
+   acuerdo y la validez.
+
+   #+begin_affirmation
+   El algoritmo eligeLider es correcto, es decir, cumple las propiedades de
+   *acuerdo* y *validez*.
+   #+end_affirmation
+
+   #+begin_proof
+   - Acuerdo :: Al terminar cualesquiera 2 procesos \(p_i\) y \(p_j\) con
+     variables \(Lider_i\) y \(Lider_j\), se cumple: \(Lider_i == Lider_j\)
+
+     Observemos que para todo tiempo \(d > 0\), todos los proceso que están a
+     distancia a lo más \(d\) respecto al proceso con el \(ID\) máximo, tiene
+     ese \(ID\) en la variable Líder.  Por inducción sobre \(d\):
+
+     + Caso base \(d = 0\) :: Es claro que \(Lider = ID\) para el proceso con el
+       \(ID\) máximo.
+
+     + Hipótesis de inducción :: Para todo proceso a distancia \(d - 1\) del
+       proceso con \(ID\) máximo tiene dicho \(ID\) en su variable \(Lider\).
+
+     + Paso inductivo :: Consideremos un proceso \(p_i\) a distancia \(d\) del
+       proceso con ID máximo. A partir de la hipótesis de inducción, sabemos que
+       existe un proceso \(p_j\) a distancia \(d - 1\) del proceso con \(ID\)
+       máximo y que tiene la variable Lider establecida a dicho
+       \(ID\). Ejecutando el algoritmo en la ronda \(d\), \(p_i\) recibe el
+       valor de \(Lider\) de \(p_j\). Ahora, el conjunto \(Mensajes\) tiene a
+       \(Lider\) de \(p_j\) y al evaluar la función max, se elegirá este valor
+       para ser \(Lider\) de \(p_i\). Si no se eligiera este valor, entonces, el
+       nodo con el valor máximo no estaba a distancia \(d\), si no a distancia
+       \(d'\), por lo que se tendría que repetir el argumento pero con el nodo a
+       distancia \(d'\).
+
+     Del algoritmo sabemos que la última ronda en que se ejecuta el algoritmo es
+     cuando \(t == total\). En el peor caso, la gráfica puede ser un camino de
+     longitud \(total - 1\), con el vértice con ID máximo en uno de los
+     extremos. Por el análisis anterior, sabemos que para un proceso \(p_i\) a
+     distancia \(d\) respecto al proceso \(p_j\) con el ID máximo, tendrá en un
+     tiempo \(d\) el \(ID\) en su variable \(Lider\), por lo que todo proceso a
+     distancia \(1, 2, \ldots, total - 1\) del proceso \(p_j\) tendrá en su
+     variable Lider el ID máximo en la ronda \(1, 2, \ldots, total - 1\)
+     correspondiente.
+
+   - Validez :: Al terminar todo proceso, se tiene como líder un ID que
+     entrada de algún proceso. Esto es fácil de observar, porqué el valor
+     \(Lider = max(Mensajes)\) es una propuesta de algún vecino.
+
+   #+end_proof
+
+   Podemos observar que si conocemos el diámetro de la gráfica, el algoritmo se
+   ejecutará más rápido. ¿Cómo podemos estimar el diámetro?
+
+
+** Breadth First Search
+
+   Los algoritmos hasta ahora han supuesto la existencia de un árbol generador
+   enraízado. Construiremos un árbol generador a partir de un proceso
+   distinguido, con la propiedad de que crece según los niveles de distancia
+   entre el proceso distinguido y los demás.
+
+   #+attr_latex: :options [Breadth-first spanning tree]
+   #+begin_definition
+   Bread-first spanning tree o BFS tree de una gráfica G respecto a una raíz
+   \(r_0\), es un árbol generador \(T_B\) con la propiedad que para todo vértice
+   \(v\) distinto de \(r_0\), el camino de \(v\) a \(r_0\) en el árbol es de
+   longitud mínima posible.
+   #+end_definition
+
+
+   #+attr_latex: :options [caption=Algoritmo BFS]
+   #+begin_lstlisting
+   Algoritmo BFS(ID, soyLider):
+     src_latex{$Padre = \bot$}
+     src_latex{$Hijos = \emptyset$}
+     src_latex{$Otros = \emptyset$}
+
+     Si no he recibido algun mensaje:
+       if soyLider and src_latex{$Padre == \bot$} then:
+         send(<BFS, ID>) a todos mis vecinos
+         Padre = ID
+
+     Al recibir <BFS, j> desde el vecino src_latex{$p_j$}:
+       if src_latex{$Padre = \bot$} then:
+         Padre = j
+         send(<parent>) a src_latex{$p_j$}
+         send(<BFS, ID>) a todos los vecinos excepto src_latex{$p_j$}
+       else:
+         send(<already>) a src_latex{$p_j$}
+
+     Al recibir <parent> desde el vecino src_latex{$p_j$}:
+       src_latex{$Hijos = Hijos \cup \{p_j\}$}
+       if src_latex{$Hijos \cup Otros$} tienen a todos los vecinos - Padre then:
+         Terminar
+
+     Al recibir <already> desde el vecino src_latex{$p_j$}:
+       src_latex{$Otros = Otros \cup \{p_j\}$}
+       if src_latex{$Hijos \cup Otros$} tienen a todos los vecinos - Padre then:
+         Terminar
+   #+end_lstlisting
+
+   #+begin_abmn
+   \(ID \in \mathbb{N}\), soyLider :: Boolean
+   #+end_abmn
+
+   Podemos observar la ejecución del algoritmo BFS sobre la gráfica mostrada en
+   la figura [[fig:BFS]]. También cuales son los estados de las variable =Padre=,
+   =Hijos= y =Otros=.
+
+   #+CAPTION: Ejecución del algoritmo BFS distribuido con proceso distinguido A
+   #+ATTR_LaTeX: scale=0.9\textwidth
+   #+LABEL: fig:BFS
+   [[./figs/dibujoBFS.png]]
+
+
+
+   #+begin_affirmation
+   Podemos observar que en toda ejecución, el algoritmo BFS construye un árbol
+   con raíz.
+   #+end_affirmation
+
+   #+begin_proof
+   Podemos observar dos cosas importantes a partir del código:
+
+   1. Una vez que un proceso establece el padre, este nunca cambia.
+   2. El conjunto de Hijos nunca decrece.
+
+   La estructura de la gráfica inducida por Padre e Hijos es estática y las
+   variables Padre e Hijos en distintos nodos son consistentes, esto es, si
+   \(p_j\) es hijo de \(p_i\), entonces, \(p_i\) es padre de \(p_j\). Mostramos
+   que la gráfica resultante G', es un árbol con raíz.
+
+   Nos preguntamos: /¿Todo nodo es alcanzable desde la raíz si el sistema es
+   conexo?/
+
+   Supongamos por contradicción que algún nodo no es alcanzable por la raíz en
+   G. Dado que el sistema es conexo, existen dos procesos \(p_i\) y \(p_j\) con
+   un canal entre ellos tal que \(p_j\) es alcanzable desde la raíz, pero
+   \(p_i\) no.
+
+   Esto implica que, durante la ejecución del algoritmo, el padre de \(p_i\) se
+   mantiene nulo \(\bot\) y el padre de \(p_j\) se establece en algún
+   momento. Entonces, \(p_j\) eventualmente ejecuta la línea 15, por lo que el
+   mensaje es recibido por \(p_i\), estableciendo la variable
+   Padre. *Contradicción*.
+
+   /No hay ciclos (el resultado es un árbol)/.
+
+   Supongamos por contradicción que hay algún ciclo \(p_{i1}, p_{i2}, \ldots,
+   p_{ik}, p_{i1}\). Notemos que si \(p_i\) es un hijo de \(p_j\), entonces,
+   \(p_i\) recibe \(<BFS, j>\) por primera vez, esto después de que \(p_j\) lo
+   reciba.
+
+   Dado que cada proceso es padre del siguiente proceso en el ciclo, esto
+   significaría que \(p_{i1}\) reciba el mensaje por primera vez antes de que
+   \(p_{i1}\) (el mismo), lo reciba posteriormente, causando que tenga dos padre
+   y por la linea 12, esto no es posible. *Contradicción*.
+   #+end_proof
+
+   #+begin_affirmation
+   El algoritmo BFS construye un árbol enraízado sobre un sistema distribudio
+   con m aristas y diámetro D, con complejidad de mensajes O(m) y complejidad de
+   tiempo O(D).
+   #+end_affirmation
+
+   #+begin_abmn
+   El algoritmo BFS construido a partir del algoritmo de Flooding,
+   garantiza que al menos para el caso síncrono, se construya un árbol BFS. En
+   el caso asíncrono no hay ninguna garantía.
+
+   Adicional a esta variante, hay otras versiones distribuidas basadas en
+   las versiones secuenciales del algoritmo de Dijsktra y de Bellman-Ford. Más
+   información en el capítulo 5 del libro =Distributed Computing: A
+   Locality-sensitive approach= de David Peleg, año 2000
+   #+end_abmn
+
+   #+begin_affirmation
+   El algoritmo BFS construye un árbol BFS con raíz en el proceso marcado como
+   /soyLider/.
+   #+end_affirmation
+
+   #+begin_proof
+   Por inducción sobre el número de ronda \(t\).Un par de acotaciones primero.
+
+   1. La gráfica construida siguiendo todas las variables Padre, es un árbol BFS
+      consistente de todos los procesos a distancia a lo más \(t - 1\) del
+      proceso líder.
+   2. Los mensajes =BFS= están en transito sólo desde procesos procesos a
+      distancia \(t - 1\) del proceso líder.
+
+   Retomando la demostración por inducción.
+
+   - Caso base :: La base es t=0. Inicialmente todas las variables Padre son
+     nulas y los mensajes \(BFS\) están saliendo del líder.
+   - Hipótesis de inducción :: Supongamos que se cumple lo dicho para \(t - 1
+     \ge 1\).
+   - Paso inductivo :: Durante la ronda \(t\), los mensajes \(BFS\) en tránsito
+     desde los nodos a distancia \(t - 1\) son recibidos. Cualquier proceso que
+     reciba el mensaje \(BFS\) está a distancia t o menos desde el líder. Un
+     proceso receptor con un Padre no nulo, está a distancia \(t - 1\) o menos
+     desde el líder, no cambia a su padre ni envía mensajes \(BFS\). Todo
+     mensaje a distancia \(t\), recibe el mensaje \(BFS\) en la ronda t y cómo
+     su padre es nulo, lo establece al padre apropiado y envía un mensaje
+     \(BFS\). Procesos que no están a distancia t no reciben el mensaje \(BFS\)
+     ni envían más información.
+   #+end_proof
+
+
+** Depth First Search
+
+   Otro algoritmo básico para construir un árbol, es el algoritmo DFS. Tiene la
+   particularidad de que es construido al agregar un proceso a la vez (uno por
+   ronda), a diferencia de BFS, que intenta agregar todos los procesos en el
+   mismo nivel, de forma concurrente.
+
+   #+attr_latex: :options [caption=Algoritmo DFS]
+   #+begin_lstlisting
+   Algoritmo DFS(ID, soyLider): // src_latex{$ID \in N$}
+     src_latex{$Padre = \bot$}
+     src_latex{$Hijos = \emptyset$}
+     SinExplorar = todos los vecinos
+
+     Si no he recibido algún mensaje:
+       if soyLider and src_latex{$Padre = \bot$} then:
+         Padre = ID
+         explore()
+
+    Al recibir <M> desde el vecino src_latex{$p_j$}:
+      if src_latex{$Padre = \bot$} then:
+        Padre = j
+        elimina src_latex{$p_j$} de SinExplorar
+        explore()
+      else:
+       send(<already>) a src_latex{$p_j$}
+       elimina src_latex{$p_j$} de SinExplorar
+
+   Al recibir <already> desde el vecino pj:
+     explore()
+
+   Al recibir <parent> desde el vecino pj:
+     src_latex{$Hijos \cup \{p_j\}$}
+     explore()
+
+   procedure explore():
+     if src_latex{$SinExplorar \neq \emptyset$} then:
+        elegir src_latex{$p_k$} en SinExplorar
+        eliminar src_latex{$p_k$} de SinExplorar
+        send(<M>) a src_latex{$p_k$}
+     else:
+       if src_latex{$Padre \neq ID$} then send(<parent>) a Padre
+         terminar
+   #+end_lstlisting
+
+   #+begin_affirmation
+   El algoritmo DFS tiene una complejidad de mensajes O(m) y una complejidad de
+   tiempo O(m), con m el número de aristas.
+   #+end_affirmation
+
+   #+caption: Ejecución del algoritmo DFS distribuido con proceso distinguido A
+   #+attr_latex: scale=0.9\textwidth
+   #+label: fig:DFS
+   [[file:figs/dibujoDFS.png]]
+
+
+** Elección de líder
+
+   Problema en el que un conjunto de procesos tienen que elegir entre ellos a un
+   líder.
+
+   ¿Por qué es importante?
+
+   - Ayuda a simplificar la *coordinación* entre procesos.
+   - Ayuda a alcanzar *tolerancia a fallos*.
+
+   Este problema tiene múltiples variantes. Informalmente podemos enunciar el
+   problema como sigue: Dado un sistema distribuido, buscamos que cada proceso
+   eventualmente decida por si mismo si es el líder o no lo es. Los procesos
+   no-líderes pueden o no conocer la identidad del líder como parte del
+   protocolo (algoritmo). Si no lo conocieran y quisiéramos que lo hicieran,
+   siempre podemos añadir una fase extra donde el líder difunden (broadcast) su
+   identidad.
+
+   Tradicionalmente, la elección de líder ha sido utilizada para estudiar
+   efectos de simetría y varios de los algoritmos de elección de líder fueron
+   diseñados para redes de tipo anillo.
+
+   Se dice que un algoritmo resuelve el problema de la elección de líder si
+   satisface:
+
+   - Los estados finales (de los procesos) son particionados en estados electos
+     y no electos.
+   - En toda ejecución admisible, exactamente un proceso (el líder) entra en un
+     *estado electo* y todos los demás procesos entran en un *estado no electo*.
+
+   - Modelo :: Asumimos que las aristas de la gráfica van entre \(p_i\) y
+     \(p_{i+1}\ \forall\ 0 \le i < n\), con la adicción módulo n. Además, los
+     procesos tienen una noción consistente de izquierda y derecha, resultando
+     en un anillo orientado. Podemos observar un ejemplo en la figura
+     [[fig:anillo]].
+
+   #+caption: Ejemplo del modelo de anillo distribuido
+   #+attr_latex: scale=0.5\textwidth
+   #+label: fig:anillo
+   [[file:figs/anillo.png]]
+
+   Un sistema exhibe simetría si podemos permutar los nodos sin cambiar el
+   comportamiento del sistema. Podemos definir la simetría como una relación de
+   equivalencia sobre los procesos, donde tenemos la propiedades adicionales de
+   que todos los procesos en la misma clase de equivalente ejecutan el mismo
+   código y cuando \(p\) es equivalente a \(p'\), cada vecino \(q\) de \(p\) es
+   equivalente a un vecino correspondiente \(q'\) de \(p'\).
+
+   Un ejemplo de una red con un montón de simetrías es un anillo anónimo.
+
+   - Un anillo es anónimo, si los procesos no tienen identificadores únicos que
+     puedan ser utilizados por algún algoritmo.
+   - Todo proceso en el sistema tiene la misma máquina de estados.
+   - Una pieza útil es el número de procesos n.
+   - Si n no es conocido por el algoritmo, a este tipo de algoritmos se les
+     llama ``uniforme'', porqué luce igual para cualquier valor de n. Para un
+     algoritmo uniforme anónimo, sólo hay una máquina de estados para todos los
+     procesos.
+   - En un algoritmo no-uniforme anónimo, para cada valor de n, hay una sola
+     máquina de estados.
+
+   Las simetrías son útiles para probar resultados de imposibilidad. Uno de
+   nuestros primeros resultados de imposibilidad que mostraremos es que no
+   existe un algoritmo de elección de líder para anillos anónimos.
+
+   La idea es mostrar que en un anillo anónimo, la simetría entre los procesos
+   siempre se mantiene, esto es, sin alguna asimetría inicial, como la que
+   pueden proveer los id únicos, la simetría no puede ser rota.
+
+   Como todos los procesos inician en el mismo estado, ellos son idénticos y
+   ejecutan el mismo programa, en cada ronda, ellos envían el mismo mensaje y en
+   cada ronda reciben los mismos mensajes, por lo que su estado no cambia.
+
+   Entonces, si alguno de los procesos es elegido como lider, entonces todos los
+   procesos son elegidos. Por lo que es imposible tener un algoritmo que elija
+   un sólo lider. El siguiente lema se cumple para sistemas deterministas.
+
+   - Anillo anónimo \(R\) de tamaño \(n > 1\)
+   - Asumimos que existe un algoritmo de elección de líder \(A\) (por
+     contradicción)
+   - El sistema es síncrono y sólo hay una configuración. Sólo hay una única
+     ejecución admisible de \(A\) en \(R\).
+
+   #+begin_lemma
+   Para cada ronda \(k\) de una ejecución admisible de \(A\) en \(R\), los
+   estados de todos los procesos al final de la ronda \(k\) son los mismos.
+   #+end_lemma
+
+   #+begin_proof
+   Por inducción en k.
+
+   - Caso base :: k = 0, se cumple porqué todos los procesos inician en el mismo
+     estado.
+   - H.I. :: Supongamos que se cumple para la ronda k - 1.
+   - P.I. :: En la ronda k - 1, los procesos están en el mismo estado (H.I.) y
+     en la ronda k, ellos envían el mismo mensaje \(m_r\) a la derecha y \(m_l\) a la
+     izquierda. En esa misma ronda, todo proceso recibe el mensaje \(m_r\) de su
+     derecha y \(m_l\) de su izquierda.
+     Todos los procesos reciben exactamente el mismo mensaje en la ronda k, dado
+     que ejecutan el mismo programa, ellos están en el mismo estado al final de
+     la ronda k.
+   #+end_proof
+
+   Un corolario inmediato, es que no puede ejecutar elección de lider en un
+   sistema anónimo con simetría, ya que si al final de alguna ronda, un proceso
+   se anuncia como líder, al entrar en estado electo, todos los demás procesos
+   hacen lo mismo.
+
+   #+begin_corollary
+   No hay algoritmos de elección de líder en anillos anónimos síncronos.
+   #+end_corollary
+
+* Local variables                                                  :noexport:
+
+# Local Variables:
+# org-export-initial-scope: buffer
+# eval: (org-babel-ref-resolve "export-setup")
+# End:
