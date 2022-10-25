@@ -944,17 +944,17 @@
    #+attr_latex: :options [caption=Algoritmo de elección de líder]
    #+begin_lstlisting
    Algoritmo eligeLider(ID, total):
-     Lider = ID, ronda = 0
+   Lider = ID, ronda = 0
 
-     Ejecutar en todo momento src_latex{$t \ge\ 0$}:
-       send(<Lider>) a todos los vecinos
+   Ejecutar en todo momento src_latex{$t \ge\ 0$}:
+   send(<Lider>) a todos los vecinos
 
-     Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
-       Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
-       Lider = max(mensajes)
-       ronda = ronda + 1
-       if ronda == total then
-          terminar algoritmo
+   Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
+   Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
+   Lider = max(mensajes)
+   ronda = ronda + 1
+   if ronda == total then
+   terminar algoritmo
    #+end_lstlisting
    #+begin_abmn
    ID \(\in \mathbb{N}\), total = \(|V|\), \(d\) grado del vértice
@@ -1068,7 +1068,7 @@
          Padre = ID
 
      Al recibir <BFS, j> desde el vecino src_latex{$p_j$}:
-       if src_latex{$Padre = \bot$} then:
+       if src_latex{$Padre == \bot$} then:
          Padre = j
          send(<parent>) a src_latex{$p_j$}
          send(<BFS, ID>) a todos los vecinos excepto src_latex{$p_j$}
@@ -1324,7 +1324,9 @@
 
    Entonces, si alguno de los procesos es elegido como lider, entonces todos los
    procesos son elegidos. Por lo que es imposible tener un algoritmo que elija
-   un sólo lider. El siguiente lema se cumple para sistemas deterministas.
+   un sólo lider. El siguiente lema se cumple para sistemas deterministas. Antes
+   de probar el lema, algunas suposiciones acerca del modelo con el que
+   trabajamos.
 
    - Anillo anónimo \(R\) de tamaño \(n > 1\)
    - Asumimos que existe un algoritmo de elección de líder \(A\) (por
@@ -1361,7 +1363,477 @@
    No hay algoritmos de elección de líder en anillos anónimos síncronos.
    #+end_corollary
 
+** Elección de líder en anillos
+
+   Mostraremos un par de algoritmos básicos de elección de líder para
+   anillos. El primero, es el algoritmo Le Lann-Chang-Roberts que funciona para
+   anillos unidireccionales. En este tipo de anillos, los mensajes sólo pueden
+   viajar en el sentido de las manecillas del reloj.[fn:1]
+
+   #+attr_latex: :options [caption=Algoritmo Le Lann-Chang-Roberts]
+   #+begin_lstlisting
+   Algoritmo LCR(src_latex{$ID_id$}):
+     Inicialmente hacer:
+       leader = 0
+       maxId = 0
+       send(src_latex{$<ID_i>$}) al vecino en el sentido de las manecillas del reloj
+     Al recibir src_latex{$<j>$}:
+       if j == src_latex{$ID_i$} then
+         leader = True
+       if j > maxId then
+         maxId = j
+         send(src_latex{$<j>$}) al vecino en el sentido de las manecillas del reloj
+   #+end_lstlisting
+
+* Tolerancia a Fallos
+
+** Consenso tolerante a fallos
+
+   - Los problemas de coordinación requieren de acuerdo.
+   - Son fáciles de resolver en sistemas confiables.
+   - En sistemas reales, una cantidad importante de componentes podrían no
+     funcionar todo el tiempo.
+   - Vamos a considerar sistemas en los que los procesos no funcionan
+     correctamente.
+
+   En sistemas reales pueden ocurrir distintos tipos de fallas:
+
+   - Un proceso puede detenerse.
+   - un proceso puede tener virus.
+   - Los mensajes se pueden perder.
+   - El contenido de los mensajes puede ser alterado.
+
+   Consideremos dos tipos de fallas:
+
+   - Fallas benignas :: Procesos Fallidos.
+   - Fallas malignas :: Procesos Bizantinos.
+
+   - *Objetivo* :: Desarrollar algoritmos que funcionen correctamente a pesar de
+     los fallos que puedan ocurrir en el sistema.
+
+   ¿Qué tipo de sistemas podrían tomar ventaja de nuestro estudio?
+
+   - Bases de datos distribuidas.
+   - Sistemas bancarios.
+   - Criptomonedas.
+   - Sistemas de reservaciones.
+
+   - ¿Qué queremos hacer? :: Buscamos dar un sistema confiable y transparente a
+     los usuarios. Un buen sistema distribuido es aquel en el que el usuario
+     tiene un servicio siempre disponible a pesar de los múltiples tipos de
+     errores que pueden ocurrir.
+
+** El problema del consenso
+
+   Cada proceso tiene una entrada, un valor que propone para el
+   consenso. Buscamos un algoritmo que satisfaga lo siguiente:
+
+   - Terminación :: Todo _proceso que es correcto_, elige un propuesta.
+   - Validez :: Todo valor elegido _fue propuesto_ por un proceso.
+   - Acuerdo :: Todo _par de valores_ elegidos son idénticos.
+
+   *Modelo A*: Sistema síncrono sin fallas y gráfica completa (\(k_n\)).
+
+   #+attr_latex: :options [caption=Algoritmo de consenso 1 en el modelo A]
+   #+begin_lstlisting
+   Algoritmo consenso1(src_latex{$v_i$})
+     Inicialmente:
+       send(src_latex{$<v_i>$}) a todos los vecinos
+
+     Al recibir mensaje de todos los vecinos:
+       vista = src_latex{$\{v_1,\ v_2,\ \ldots,\ v_d\} \cup v_i$}
+       decision = min(vista)
+   #+end_lstlisting
+   #+begin_abmn
+   Podemos utilizar cualquier función \(f(v_1,\ \ldots,\ v_n)\) determinista.
+   #+end_abmn
+
+   #+begin_affirmation
+   El algoritmo =consenso 1= soluciona el problema del consenso.
+   #+end_affirmation
+
+   #+begin_proof
+   Probaremos que se cumple terminación, validez y acuerdo.
+
+   - Terminación :: Al operar en un sistema síncrono, el algoritmo termina en
+     dos rondas, eligiendo una propuesta [ =min(vista)= ].
+   - Validez :: El conjunto vista tiene valores propuestos por los vecinos, por
+     lo que =min(vista)= es una propuesta de algún vecino.
+   - Acuerdo :: Como \(G = k_n\) y sin fallas, todos los procesos tienen el
+     mismo contenido en sus variable =vista=.
+   #+end_proof
+
+   Este algoritmo resuelve el problema del consenso. Otra opción es extender el
+   algoritmo de elección de líder visto algunas secciones atrás. Recordemos el
+   algoritmo:
+
+   #+attr_latex: :options [caption=Algoritmo de elección de líder]
+   #+begin_lstlisting
+   Algoritmo eligeLider(ID, total):
+   Lider = ID, ronda = 0
+
+   Ejecutar en todo momento src_latex{$t \ge\ 0$}:
+   send(<Lider>) a todos los vecinos
+
+   Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
+   Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
+   Lider = max(mensajes)
+   ronda = ronda + 1
+   if ronda == total then
+   terminar algoritmo
+   #+end_lstlisting
+   #+begin_abmn
+   ID \(\in \mathbb{N}\), total = \(|V|\), \(d\) grado del vértice
+   #+end_abmn
+
+   Propongamos el siguiente algoritmo, el modelo sigue siendo un sistema
+   síncrono sin fallas y sobre la gráfica completa (\(k_n\)):
+
+   #+attr_latex: :options [caption=Algoritmo de consenso 2 en el modelo A]
+   #+begin_lstlisting
+   Algoritmo consenso2(src_latex{$v_i,\ total$}):
+
+     soyLider = eligeLider(ID, total)
+
+     if soyLider then
+       send(src_latex{$<v_i>$})
+       decidir mi propuesta
+     else:
+       esperar propuesta del lider
+       elegir propuesta del lider
+   #+end_lstlisting
+
+   #+begin_affirmation
+   El algoritmo =consenso2= soluciona el problema del consenso.
+   #+end_affirmation
+
+   #+begin_proof
+   De manera similar al caso del algoritmo =consenso1=, probaremos que este
+   algoritmo satisface terminación, validez y acuerdo:
+
+   - Terminación :: Sabemos que el algoritmo de elección de líder termina
+     después de \(n\) rondas, con \(n\) el número de procesos en el sistema. Por
+     lo que, en las subsecuentes dos rondas, termina el algoritmo y todo proceso
+     elige un valor.
+   - Validez :: Tenemos dos opciones, el líder decide su propuesta o cualquier
+     otro proceso sigue la propuesta del líder.
+   - Acuerdo :: El líder decide su propuesta y todos los demás lo siguen.
+   #+end_proof
+
+** Sistemas síncronos con fallos de tipo paro
+
+   Un parámetro importante de nuestro problema es \(f\), que representa el
+   máximo número de procesos que pueden fallar durante la ejecución de nuestro
+   sistema. A este tipo de sistemas los llamamos f-resilient.
+
+   Una ejecución de un sistema con fallas de tipo paro consiste de:
+
+   - Subconjunto \(F\) con a lo más \(f\) procesos (fallidos).
+   - El subconjunto \(F\) no es conocido /a priori/. Puede ser diferente en cada
+     ejecución.
+   - Cada ronda contiene:
+     + Exactamente un evento de cómputo \(\forall \text{ proceso } p \not\in
+       F\).
+     + A lo más un evento de cómputo \(forall \text{ proceso } p \in F\). Además
+       si un proceso en F no tiene un evento de cómputo en alguna ronda,
+       entonces, no tiene eventos de cómputo en rodas subsecuentes. Esto
+       significa que si un proceso falla, ya no se repone. Y un conjunto
+       arbitrario de sus mensajes son entregados.
+
+  Esta última propiedad es muy importante y causa las dificultades asociadas con
+  este modelo de fallas. Si todo fallo de tipo paro es un fallo limpio, en el
+  cual todos o ninguno de los mensajes de salida de los procesos fallidos son
+  entregados en su último paso, el consenso puede ser resuelto
+  eficientemente. Pero la incertidumbre en el efecto de los fallos de tipo paro
+  significa que los procesos deben realizar más trabajo (intercambiar más
+  mensajes) para poder resolver el consenso.
+
+*** Sistemas con fallos de un proceso
+
+    - *Modelo B:* ::  Consideremos lo siguiente:
+      - Gráfica \(k_n\) (3 procesos).
+      - Sistema síncrono.
+      - Un proceso en el sistema se puede detener en cualquier momento.
+
+    #+begin_affirmation
+    El algoritmo =consenso1= resuelve el problema del consenso en el *modelo B*.
+    #+begin_proof
+    Mostraremos que no puede resolver el problema del consenso en el modelo
+    B. En particular mostraremos que el algoritmo puede no cumplir
+    acuerdo. Sea X una ejecución del sistema distribuido en el modelo
+    B. Consideremos que el proceso \(p_1\) falla durante la ejecución de
+    elección de líder y sólo envía un mensaje a alguno de los otros dos
+    procesos. En este punto, los demás procesos no pueden llegar a consenso,
+    porqué el estado de la variable vista es distinta en ambos procesos y no
+    pueden elegir el mismo valor.
+    #+end_proof
+    #+end_affirmation
+
+    #+attr_latex: :options [caption=Algoritmo de consenso 1 en el modelo B]
+    #+begin_lstlisting
+    Algoritmo consenso1(src_latex{$v_i$})
+      Inicialmente:
+        send(src_latex{$<v_i>$}) a todos los vecinos
+
+      Al recibir mensaje de todos los vecinos:
+        vista = src_latex{$\{v_1,\ v_2,\ \ldots,\ v_d\} \cup v_i$}
+        decision = min(vista)
+    #+end_lstlisting
+    #+begin_abmn
+    Podemos utilizar cualquier función \(f(v_1,\ \ldots,\ v_n)\) determinista.
+    #+end_abmn
+
+    #+begin_affirmation
+    El algoritmo =consenso2= resuelve el problema del consenso en el *modelo B*.
+    #+begin_proof
+    Mostraremos que no puede resolver el problema del consenso en el modelo
+    B. En particular mostraremos que el algoritmo puede no cumplir
+    terminación. Śea X una ejecución del sistema distribuido en el modelo
+    B. Consideremos que el proceso \(p_3\) falla durante la ejecución de
+    elección de líder. En este punto, los demás procesos no pueden llegar a
+    ejecutar la sección de elección de valor y el sistema no termina.
+    #+end_proof
+    #+end_affirmation
+
+    #+attr_latex: :options [caption=Algoritmo de consenso 2 en el modelo B]
+    #+begin_lstlisting
+    Algoritmo consenso2(src_latex{$v_i, total$}):
+
+      soyLider = eligeLider(ID, total)
+
+      if soyLider then
+        send(src_latex{$<v_i>$})
+        decidir mi propuesta
+      else:
+        esperar propuesta del lider
+        elegir propuesta del lider
+    #+end_lstlisting
+
+    Bajo el ~modelo B~, los algoritmos =consenso1= y =consenso2= no pueden resolver el
+    problema del consenso. ¿Qué podemos proponer para resolver este problema?
+
+    Modificaremos el algoritmo consenso1 para resolver el problema. La idea
+    básica de este nuevo algoritmo es:
+
+    - Agregamos una ronda adicional para volver a propagar los valores que los
+      procesos ya leyeron.
+    - Lo anterior funciona porqué sabemos que en nuestro modelo solo un proceso
+      falla.
+
+    Sea =consenso3= el algoritmo que resuelve el problema del consenso en el
+    modelo B.
+
+    #+attr_latex: :options [caption=Algoritmo de consenso 3 en el modelo B]
+    #+begin_lstlisting
+    Algoritmo consenso3(src_latex{$v_i$}):
+
+    Inicialmente:
+      send(src_latex{$<v_i>$}) a todos los vecinos
+
+    Al recibir mensaje de los vecinos en la ronda 1:
+      src_latex{$vista_1\ =\ \{<v_1>,\ \ldots,\ <v_d>\} \cup v_i$}
+      src_latex{$m_i = \min(vista_1)$}
+      send(src_latex{$<m_i>$}) a todos los vecinos
+
+    Al recibir mensaje de los vecinos en la ronda 2:
+      src_latex{$vista_2 = \{<m_1>,\ \ldots,\ <m_d>\} \cup m_i$}
+      src_latex{$desicion = \min(vista_2)$}
+    #+end_lstlisting
+
+    #+begin_affirmation
+    El algoritmo consenso3 soluciona el problema del consenso.
+    #+begin_proof
+    Hay que probar que se cumplen las tres propiedades del consenso.
+
+    - *Terminación* :: Todo proceso correcto decide un valor en 3 rondas.
+    - *Validez* ::  El conjunto \(vista_1\) y \(vista_2\) tienen propuestas de
+      los vecinos, por lo que \(\min(vista_1)\) y \(\min(vista_2)\) son
+      resultado de alguna propuesta de algún vecino.
+    - *Acuerdo* :: A pesar de que en la ronda uno existiese una vista parcial
+      distinta para todos los procesos, en la ronda dos, ellos deciden el mismo
+      valor a causa de la propagación hecha anteriormente.
+    #+end_proof
+    #+end_affirmation
+
+*** Sistemas con fallos de f procesos
+
+    Vamos a generalizar los modelos anteriores de la siguiente forma (*modelo C*):
+
+    - Gráfica de comunicación G: _\(K_n\)_.
+    - Comunicación _síncrona_.
+    - _A lo más \(f\) procesos fallan_: Al detenerse pueden dejar de enviar un
+      conjunto arbitrario de mensajes.
+    - \(f < n\), con _\(n\) el número de procesos_ en el sistema.
+
+    Podemos definir un mecanismo de consenso para nuestro problema:
+
+
+    *Mecanismo de consenso*
+
+    1. Cada proceso inicia con una propuesta
+    2. Envía su propuesta a todos sus vecinos.
+    3. El proceso, al recibir todos los mensajes, decide un valor utilizando una
+       función determinista.
+    4. Repetir los pasos 1 a 3.
+
+
+    - *Propiedad 1* :: Si _no hay fallas_, se llega a un _acuerdo_.
+    - *Propiedad 2* ::  Si _ya existía un acuerdo_, el acuerdo _se mantiene_.
+
+    Para satisfacer nuestro mecanismo de consenso, proponemos el siguiente
+    algoritmo que satisface nuestro mecanismo de consenso. Podemos observar que
+    se cumplen las propiedades de _terminación (ok)_, _validez (ok)_ y _acuerdo (?)_.
+
+    #+attr_latex: :options [caption = Algoritmo de consenso para el modelo síncrono con \(f\) fallos de tipo paro]
+    #+begin_lstlisting
+    Algoritmo consenso(prop):
+
+    For r = 0 to f do: // Ejecutamos f + 1 rondas
+      send(src_latex{$<prop>$}) a todos los vecinos
+      src_latex{$view = \{m_i | m_i\ \text{mensaje recibido del vecino}\ i\} \cup prop$} {{{results(@@latex:$view = \{m_i | m_i \text{mensaje recibido del vecino}\ i\} \cup prop$@@)}}}
+      src_latex{$prop = \min(view)$}
+    End For
+
+    decision = prop
+    #+end_lstlisting
+
+    #+begin_affirmation
+    El algoritmo =consenso= resuelve el problema del consenso en el modelo C.
+    #+begin_proof
+    Terminación: Termina el algoritmo en f + 1 rondas
+
+    Validez: ~prop~ en cada ronda es un valor que propuso algún proceso.
+
+    Acuerdo:
+      + El algoritmo ejecuta _f + 1 rondas_, entonces, _hay a los más f fallas_.
+      + En _al menos una_ de las rondas _no hay fallas_.
+      + Supongamos que lo anterior sucede en la ronda r. _Al final_ de esa ronda,
+        todos los procesos que están vivos _tienen la misma propuesta_.
+      + Desde ese momento y hasta la ronda _f + 1_, _el acuerdo se mantiene_, sin
+        importar el _número de fallas que puedan ocurrir después_.
+      + Por lo tanto, _todos los procesos acuerdan el mismo valor_.
+
+    #+end_proof
+    #+end_affirmation
+
+    ¿Visualmente como se ve este argumento de acuerdo? Consideremos
+
+
+*** Algoritmo de consenso detección temprana
+
+    El análisis del algoritmo anterior nos hace plantearnos una pregunta: ¿Será
+    posible modificar el algoritmo para que los procesos se detengan en la ronda
+    r que se exhibe en la prueba anterior?
+
+    Vamos a analizar que sucede con ese algoritmo. Lo primero que sabemos, es
+    que en cada ejecución _ocurren a lo más f fallos_, aunque el número real de
+    fallas \(t\), con \(t \ge f\), _puede ser mucho menor_. El objetivo es diseñar
+    algoritmos que _detecten lo antes posible_ cuando pueden _tomar una
+    decisión_. El mecanismo básico de acuerdo garantiza que en _un ronda sin
+    fallas, se llega a un acuerdo_. Lo que buscamos ahora es que algún proceso
+    _detecte_ que, desde su perspectiva, _no ocurrieron fallas_ en alguna ronda. Es
+    decir, tener un _mecanismo básico de consenso con detección temprana_.
+
+
+    *Mecanismo básico de consenso con detección temprana*. Se reciben el mismo
+    número de mensajes en dos rondas consecutivas.
+
+    #+attr_latex: :options [caption=Algoritmo de consenso con detección temprana]
+    #+begin_lstlisting
+    Algoritmo consensoTemprano(prop):
+
+    src_latex{$flag = false,\ vec\_ant = vec\_act = 0$}
+
+    For r to f do:
+      send(src_latex{$<prop, flag>$})
+      if flag then
+        decide prop
+      end if
+      src_latex{$view = \{m_i | m_i \text{ prop recibida}\} \cup prop$}
+      src_latex{$prop = \min(view)$}
+      src_latex{$F = \{f_i | f_i \text{ flag recibida}\} \cup flag$}
+      decision? = all(F)
+      src_latex{$vec\_act = 1 + #mensajes\_recibidos$}
+      if src_latex{$vec\_ant == vec\_act$} or decision? then
+        flag = true
+      end if
+      src_latex{$vec\_ant = vec\_act$}
+    End for
+    decide prop
+    #+end_lstlisting
+
+    #+begin_affirmation
+    El algoritmo =consensoTemprano= soluciona el problema del consenso, tolerando
+    a lo más f fallos.
+    #+begin_proof
+    *Terminación:* Termina en a lo más f + 1 rondas.
+    *Validez:* =prop= siempre es propuesto por alguien.
+    *Acuerdo:* Sea \(r\) la primera ronda en que para algún \(p_i\) se cumple
+    \(vec\_ant_r =​= vec\_act_r\). Sea \(p_j \neq \p_i | p_j\) detecta
+    \(vec\_ant_r =​= vec\_act_r\). Por demostrar: \(prop_i == prop_j\).
+    Por contradicción, supongamos que \(prop_i \neq prop_j\) en la ronda
+    \(r,\ \Rightarrow,\ \exists\ p_k\ |\ p_k\ send_r(prop_k)\ \rightarrow\ p_i\ \wedge\
+    p_k\ ¬send_r(prop_k) \rightarrow p_j\). Como \(p_i\) y \(p_j\) detectan
+    que \(vec\_ant_r == vec\_ant_r\ \Rightarrow\ p_k\ send_{r-1}(prop_k)\
+    \rightarrow\ \{p_i, p_j\} \Rightarrow p_j\) no recibió el mismo número de
+    mensajes en dos rondas consecutivas.
+
+    \therefore \(prop_i =​= prop_j\)
+    #+end_proof
+    #+end_affirmation
+
+    #+begin_affirmation
+    En toda ejecución del algoritmo =consensoTemprano= cada proceso correcto
+    termina en a lo más \(\min(t + 2, f + 1)\) rondas.
+
+    #+begin_proof
+    Dada una \(t < f\) (número de fallas reales), en el peor de los casos, hay una
+    falla en cada una de las t rondas. Entonces, en la ronda \(t + 1\) no hay
+    fallas y se detecta el acuerdo. En la ronda \(t + 2\) todos deciden.
+
+    Si t = f, se cumple que los procesos correctos terminan en la ronda
+    f + 1. Esto si en cada ronda falla un proceso.
+    Por otro lado, existen ejecuciones en las que \(t = f\), pero aún así, el
+    algoritmo decide con mucho menos rondas que \(f + 1\). Por ejemplo, todos
+    los procesos fallidos mueren al inicio y en tres rondas deciden.
+    #+end_proof
+    #+end_affirmation
+
+
+
+
+
+*** Condiciones de detección de acuerdo
+
+** Sistemas síncronos con fallas bizantinas
+
+** Máquina de estados replicada y la universalidad del consenso
+
+** Consenso en sistemas asíncronos
+
+*** Tiempo y resultados de imposibilidad
+
+*** Relación de causalidad
+
+*** Relojes de Lamport
+
+*** Relojes vectoriales
+
+*** Cortes
+
+*** Algoritmo de Paxos
+
+*** Imposibilidad del consenso
+
+** Detectores de Fallos
+
+* Footnotes
+
+[fn:1]Veremos más adelante que la distinción entre anillos unidireccionales y
+bidireccionales no es un gran problema.
+
 * Local variables                                                  :noexport:
+
 
 # Local Variables:
 # org-export-initial-scope: buffer
