@@ -1766,17 +1766,24 @@
     El algoritmo =consensoTemprano= soluciona el problema del consenso, tolerando
     a lo más f fallos.
     #+begin_proof
+
     *Terminación:* Termina en a lo más f + 1 rondas.
     *Validez:* =prop= siempre es propuesto por alguien.
     *Acuerdo:* Sea \(r\) la primera ronda en que para algún \(p_i\) se cumple
-    \(vec\_ant_r =​= vec\_act_r\). Sea \(p_j \neq \p_i | p_j\) detecta
-    \(vec\_ant_r =​= vec\_act_r\). Por demostrar: \(prop_i == prop_j\).
-    Por contradicción, supongamos que \(prop_i \neq prop_j\) en la ronda
-    \(r,\ \Rightarrow,\ \exists\ p_k\ |\ p_k\ send_r(prop_k)\ \rightarrow\ p_i\ \wedge\
-    p_k\ ¬send_r(prop_k) \rightarrow p_j\). Como \(p_i\) y \(p_j\) detectan
-    que \(vec\_ant_r == vec\_ant_r\ \Rightarrow\ p_k\ send_{r-1}(prop_k)\
-    \rightarrow\ \{p_i, p_j\} \Rightarrow p_j\) no recibió el mismo número de
-    mensajes en dos rondas consecutivas.
+    \(vec\_ant_r =​= vec\_act_r\). Sea \(p_j \neq\ p_i |\ p_j\) detecta
+    \(vec\_ant_r =​= vec\_act_r\). Tenemos que mostrar que \(prop_i == prop_j\).
+    Por contradicción, supongamos que \(prop_i \neq prop_j\) al final de la
+    ronda \(r\), siempre recordando, que tanto \(p_i \text{ y } p_j\) detectaron
+    que se cumple \(vec\_ant_r =​= vec\_act_r\) y la gráfica es completa.
+    Entonces, para que ambos sean distintos \(\exists\ p_k\ |\ p_k\
+    send_r(prop_k)\ \rightarrow\ p_i\ \wedge\ p_k\ ¬send_r(prop_k) \rightarrow
+    p_j\) en esa misma ronda porqué falla.  Por la propiedad de que \(p_i\) y
+    \(p_j\) detectaron en la ronda \(r\) que \(vec\_ant_r =​= vec\_act_r\),
+    \(p_k\) le debió enviar un mensaje a \(p_i\) y \(p_j\) en la ronda \(r -
+    1\). Pero esto implica que \(p_j\) no recibió el mismo número de mensajes en
+    dos rondas consecutivas, lo cuál es una contradicción respecto a nuestra
+    suposición de que ambos procesos reciben el mismo número de mensajes en dos
+    rondas consecutivas.
 
     \therefore \(prop_i =​= prop_j\)
     #+end_proof
@@ -1785,21 +1792,34 @@
     #+begin_affirmation
     En toda ejecución del algoritmo =consensoTemprano= cada proceso correcto
     termina en a lo más \(\min(t + 2, f + 1)\) rondas.
-
-    #+begin_proof
-    Dada una \(t < f\) (número de fallas reales), en el peor de los casos, hay una
-    falla en cada una de las t rondas. Entonces, en la ronda \(t + 1\) no hay
-    fallas y se detecta el acuerdo. En la ronda \(t + 2\) todos deciden.
-
-    Si t = f, se cumple que los procesos correctos terminan en la ronda
-    f + 1. Esto si en cada ronda falla un proceso.
-    Por otro lado, existen ejecuciones en las que \(t = f\), pero aún así, el
-    algoritmo decide con mucho menos rondas que \(f + 1\). Por ejemplo, todos
-    los procesos fallidos mueren al inicio y en tres rondas deciden.
-    #+end_proof
     #+end_affirmation
 
+    Antes de dar la demostración, demos la idea de esta.  Dada una \(t < f\)
+    (número de fallas reales), en el peor de los casos, hay una falla en cada
+    una de las t rondas. Entonces, en la ronda \(t + 1\) no hay fallas y se
+    detecta el acuerdo. En la ronda \(t + 2\) todos deciden.
 
+    Si \(t = f\), se cumple que los procesos correctos terminan en la ronda
+    \(f + 1\). Esto si en cada ronda falla un proceso.  Por otro lado, existen
+    ejecuciones en las que \(t = f\), pero aún así, el algoritmo decide con
+    mucho menos rondas que \(f + 1\). Por ejemplo, todos los procesos fallidos
+    mueren al inicio y en tres rondas deciden.
+
+    #+begin_proof
+    Sea E una ejecución del algoritmo =consensoTemprano= y sea \(j\) la primera
+    ronda en la que un proceso \(p\) ve la condición \(vec\_ant == vec\_act\)
+    como verdadera. Siguiendo el algoritmo observamos que:
+
+    \begin{align}
+    vec\_act_j \ge n - (j - 1) \wedge vec\_act_{j - 1} \ge n - (j - 1) \\
+    n - (j - 2) > n - (j - 1)\\
+    \text{Han ocurrido a lo más } j - 2 \text{ fallas hasta la ronda } j - 2\\
+    n - (j - 2) > vec\_act_{j - 1}\\
+    vec\_act_{j - 1} \ge vec\_act_j \Rightarrow vec\_act_j == vec\_act_{j - 1}
+    \Rightarrow flag = true \\
+    \text{En la ronda } j + 1 \text{ deciden.}
+    \end{align}
+    #+end_proof
 
 
 
