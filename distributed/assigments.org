@@ -149,7 +149,7 @@
   (define-skeleton tarea-skeleton
     "Docstring"
     "Number: "
-    "* Tarea " str " (Entrega el " (setq v1 (skeleton-read "Entrega el: ")) " a las 23:59) :assignment:tarea: \n"
+    "* Tarea " str " (Entrega el " (setq v1 (skeleton-read "Entrega el: ")) " a las 23:59) :assignment:solved: \n"
     >":properties:\n"
     >":export_file_name: artifacts/tarea-"str"\n"
     >":export_date: \\today\n"
@@ -167,9 +167,9 @@
   #+call: togglesolutions()
 
 
-* Tarea 2 (entrega el 14 de septiembre del 2022 a las 23:59) :assignment:solved:
+* Tarea 2 (entrega el 14 de septiembre del 2022 a las 23:59) :assignment:unsolved:
 :properties:
-:export_file_name: artifacts/tarea-2-solved
+:export_file_name: artifacts/tarea-2
 :export_date: \today
 :end:
 #+options: num:nil
@@ -882,15 +882,20 @@ que tu escritura sea legible, de otra forma ĺa tarea será descartada.
       #+end_solution
 
 
-* Tarea 4 (Entrega el 4 de octubre del 2022 a las 23:59) :assignment:unsolved:
+* Tarea 4 (Entrega el 4 de octubre del 2022 a las 23:59)  :assignment:unsolved:
   :properties:
   :export_file_name: artifacts/tarea-4
   :export_date: \today
   :end:
   #+call: togglesolutions()
 
+  #+RESULTS:
+  #+begin_export latex
+  \toggletrue{solutions}
+  #+end_export
+
   Tus respuestas deben ser claras y concisas. Si entregas tu tarea escrita a
-  mano, que tu escritura sea legible, de otra forma ĺa tarea será descartada.
+  mano, que tu escritura sea legible, de otra forma la tarea será descartada.
 
 ** Problemas
 
@@ -900,8 +905,69 @@ que tu escritura sea legible, de otra forma ĺa tarea será descartada.
       resultado del conteo. Muestra que es correcto.
 
       #+begin_solution
+      Consideremos el algoritmo DFSContador mostrado en el pseudocódigo
+      ref:alg:dfscontador. Para ver que el algoritmo es correcto, observamos que
+      el algoritmo está basado en el algoritmo DFS visto en clase. En
+      particular, se agregaron cambios en las líneas 5, 26, 36 y 38. En la línea
+      5 se agrega una variable llamada total, inicializada en 1. En la línea
+      26, cada vez que un proceso recibe la confirmación de un hijo, este recibe
+      también la cantidad de procesos que fueron visitados por el algoritmo
+      DFS. En la línea 36, es donde se envía la información recibida en la línea
+      anterior y finalmente en la línea 38, se añade una llamada al algoritmo
+      broadcast.
 
+      Para mostrar que es correcto, observemos que este algoritmo es
+      prácticamente idéntico al algoritmo de DFS visto en clase, donde lo único
+      que cambia es la información que circula en el sistema. En esta variante,
+      cada vez que un proceso no tiene más elementos para explorar, envía a su
+      padre un mensaje de confirmación junto con el valor de la variable
+      \(total\)
+      La idea general de este algoritmo es que una vez que el algoritmo terminó
+      de explorar en algún proceso, este envíe hacia sus padres la cantidad de
+      hijos que tiene. Esto empieza desde los
       #+end_solution
+
+      #+attr_latex: :options [caption=Algoritmo para contar el número de procesos en el sistema  basado en DFS, label=alg:dfscontador]
+      #+begin_lstlisting
+      Algoritmo DFSContador(ID, soyLider): // src_latex{$ID \in N$}
+        src_latex{$Padre = \bot$}
+        src_latex{$Hijos = \emptyset$}
+        SinExplorar = todos los vecinos
+        total = 1
+
+        Si no he recibido algún mensaje:
+          if soyLider and src_latex{$Padre = \bot$} then:
+            Padre = ID
+            explore()
+
+        Al recibir <M> desde el vecino src_latex{$p_j$}:
+         if src_latex{$Padre = \bot$} then:
+           Padre = j
+           elimina src_latex{$p_j$} de SinExplorar
+           explore()
+         else:
+           send(<already>) a src_latex{$p_j$}
+           elimina src_latex{$p_j$} de SinExplorar
+
+        Al recibir <already> desde el vecino pj:
+          explore()
+
+        Al recibir <parent, totalHijo> desde el vecino pj:
+          src_latex{$Hijos \cup \{p_j\}$}
+          src_latex{$total = total + totalHijo$}
+          explore()
+
+        procedure explore():
+          if src_latex{$SinExplorar \neq \emptyset$} then:
+             elegir src_latex{$p_k$} en SinExplorar
+             eliminar src_latex{$p_k$} de SinExplorar
+             send(<M>) a src_latex{$p_k$}
+          else:
+            if src_latex{$Padre \neq ID$} then
+              send(<parent, total>) a Padre
+            else
+              Broadcast(ID, soyLider, total)
+      #+end_lstlisting
 
    2. *(2 puntos)* Describe un algoritmo distribuido basado en \(DFS\) que, en una
       gráfica arbitraria \(G\) con \(n\) vértices anónimos, asigne etiquetas
@@ -912,8 +978,53 @@ que tu escritura sea legible, de otra forma ĺa tarea será descartada.
       tengan una etiqueta explicita.
 
       #+begin_solution
-
+      Consideremos el algoritmo DFSNombrador mostrado en el pseudocódigo ref:alg:dfsnombrador.
       #+end_solution
+
+      #+attr_latex: :options [caption=Algoritmo nombrar procesos de [1,\(\ldots\), n] basado en DFS, label=alg:dfsnombrador]
+      #+begin_lstlisting
+      Algoritmo DFSNombrador(soyLider): // src_latex{$ID \in N$}
+        src_latex{$Padre = \bot$}
+        src_latex{$Hijos = \emptyset$}
+        SinExplorar = todos los vecinos
+        src_latex{$ID = 0$}
+        src_latex{$TempID = \bot$}
+
+        Si no he recibido algún mensaje:
+          if soyLider and src_latex{$Padre = \bot$} then:
+            Padre = mySelf
+            explore(ID)
+
+        Al recibir src_latex{$<M, ID_j>$} desde el vecino src_latex{$p_j$}:
+         if src_latex{$Padre = \bot$} then:
+           Padre = j
+           elimina src_latex{$p_j$} de SinExplorar
+           src_latex{$ID = ID_j$}
+           explore(ID)
+         else:
+           send(<already>) a src_latex{$p_j$}
+           elimina src_latex{$p_j$} de SinExplorar
+
+        Al recibir <already> desde el vecino pj:
+          explore(ID)
+
+        Al recibir <parent, src_latex{$ID_j$}> desde el vecino pj:
+          src_latex{$Hijos \cup \{p_j\}$}
+          src_latex{$total = total + totalHijo$}
+          ID = src_latex{$ID_j + 1$}
+          explore()
+
+        procedure explore(src_latex{$ID_t$}):
+          if src_latex{$SinExplorar \neq \emptyset$} then:
+             elegir src_latex{$p_k$} en SinExplorar
+             eliminar src_latex{$p_k$} de SinExplorar
+             send(src_latex{$<M, ID_t>$}) a src_latex{$p_k$}
+          else:
+            if src_latex{$Padre \neq ID$} then
+              src_latex{$ID = ID_t + 1$}
+              send(<parent, ID>) a Padre
+              terminar
+      #+end_lstlisting
 
    3. *(2 puntos)* Modifica el algoritmo DFS para que se ejecute en tiempo a los
       más \(2|V|\) y no mande más de \(2|E|\) mensajes, suponiendo que las
@@ -922,7 +1033,14 @@ que tu escritura sea legible, de otra forma ĺa tarea será descartada.
       pero envía el mensaje a sólo uno de ellos.
 
       #+begin_solution
+      El algoritmo original ya cumplía la restricción de tiempo. Lo interesante
+      ahora es reducir la complejidad de mensajes a los más \(2|E|\) mensajes
+      enviados. Para poder garantizar esto, es necesario realizar los siguientes
+      cambios al algoritmo original:
 
+      1. Foo
+      2. Bar
+      3. Baz
       #+end_solution
 
    4. *(2 puntos)* Considera el algoritmo ref:alg:coloracion, que calcula una
@@ -953,7 +1071,7 @@ que tu escritura sea legible, de otra forma ĺa tarea será descartada.
       #+end_lstlisting
 
       #+begin_solution
-
+      Refutamos
       #+end_solution
 
    5. *(2 puntos)* Un toro \(n \times m\) es una versión dos dimensional de un
@@ -976,6 +1094,392 @@ que tu escritura sea legible, de otra forma ĺa tarea será descartada.
       #+begin_solution
 
       #+end_solution
+
+
+
+
+* Tarea 5 (Entrega el 8 de noviembre del 2022 a las 23:59) :assignment:unsolved:
+  :properties:
+  :export_file_name: artifacts/tarea-5
+  :export_date: \today
+  :end:
+  #+call: togglesolutions()
+
+  Tus respuestas deben ser claras y concisas. Si entregas tu tarea escrita a
+  mano, que tu escritura sea legible, de otra forma la tarea será descartada.
+
+** Problemas
+
+
+   1. *(2 puntos)* Considera la siguiente variante del algoritmo de consenso con terminación
+      temprana. Contesta lo siguiente:
+
+      1. Demuestra que el algoritmo ref:alg:consensotemp soluciona el problema
+         del consenso, tolerando f < n fallas de tipo paro, donde \(n\) es el
+         número de procesos en el sistema.
+
+      2. ¿Es cierto que los procesos correcto terminan en a lo más \(\max(t + 2,
+         f + 1)\) rondas en el algoritmo ref:alg:consensotemp? Argumenta tu
+         respuesta. Recuerda que \(t \le f\) es el número de fallas que
+         realmente ocurren en una ejecución dada.
+
+      3. Haz un análisis del número máximo de mensajes que se envían en una
+         ejecución del algoritmo ref:alg:consensotemp. Tu cota debe estar en
+         función de \(n\) y \(f\).
+
+      #+attr_latex: :options [caption=Algoritmo de consenso temprano, label=alg:consensotemp]
+      #+begin_lstlisting
+      Algoritmo consenso(prop)
+        flag = false
+        rec[0, 1, ...] = [n, n, ...]
+        r = 0
+        src_latex{$vista = {prop}$}
+        while True do:
+          r = r + 1
+          send(<vista, flag>) a todos
+          if flag then decide max(vista) end if
+          vista = union de todas las vistas recibidas en
+                  la ronda r y la mia
+          dec = src_latex{$or$} de todas las src_latex{$flag's$}
+                recibidas en la ronda r y la mia
+          rec[r] = 1 + numero de mensajes recibidos en la
+                   ronda r y la mia
+          if src_latex{$dec \vee (rec[r - 1] == rec[r]$} then
+            flag = true
+          end if
+        end while
+      #+end_lstlisting
+
+      #+begin_solution
+
+      #+end_solution
+
+   2. *(2 puntos)* Demuestra que el algoritmo ref:alg:consensoarb soluciona el problema del
+      consenso en una gráfica \(G\) arbitraria, tolerando \(f < \mathtt{k}(G)\)
+      fallas de tipo paro. \(\mathtt{k}(G)\) denota la /conexidad por vértices/
+      de \(G\), es decir, el mínimo número de vértices que se tienen que quitar
+      de G para desconectarla. Entonces, si hay menos de \(\mathtt{k}(G)\)
+      fallas de los procesos, la gráfica que queda sigue siendo conexa. Tip:
+      Piensa que tanto tarda en /fluir/ la entrada mínima más pequeña, a pesar de
+      las fallas que puedan ocurrir.
+
+      #+attr_latex: :options [caption=Algoritmo de consenso para gráficas árbitrarias para \(f < \mathtt{k}(G)\) fallas. \(n\) es el número de procesos en el sistema, label=alg:consensoarb]
+      #+begin_lstlisting
+      Algoritmo consenso(prop)
+        for r = 1 to n do
+          send(<prop>) a todos mis vecinos
+          vista = conjunto con todas las prop recibidas y la mia
+          prop = min(vista)
+        end for
+        decide prop
+      #+end_lstlisting
+
+      #+begin_solution
+
+      #+end_solution
+
+   3. *(2 puntos)* Considera el algoritmo de consenso con fallas de tipo paro visto en
+      clase. Suponga que en lugar de ejecutar \(f + 1\) rondas, el algoritmo
+      sólo ejecuta \(f\) rondas, con la misma regla de decisión. Describa una
+      ejecución particular en la que las propiedades de validez y acuerdo sean
+      violadas.
+
+      #+begin_solution
+
+      #+end_solution
+
+   4. *(2 puntos)* Da una ejecución del algoritmo ref:alg:bizantinos para n = 4 procesos y t
+      = 1 fallas bizantinas, en la que los procesos correctos no llegue a un
+      consenso, a pesar de que los cuatro procesos, íncluido el Bizantino,
+      empiecen con la misma propuesta y el bizantino sea el último de los
+      coordinadores de la ejecución. Explica tu respuesta.
+
+      #+attr_latex: :options [caption=Algoritmo de consenso bizantino, label=alg:bizantinos]
+      #+begin_lstlisting
+      Algoritmo consensoBizantino(prop)
+        propInicial = prop
+        for fase = 0 to t do
+          // primera ronda de la fase
+          send(<prop>) a todos
+          rec = multiconjunto con todas las src_latex{$prop's$} recibidas
+                en la ronda, incluida la mia
+          frec = alguno de los valores que se repite mas en rec
+          num = numero de veces que se repite frec en rec
+          // Segunda ronda
+          if ID == fase then
+            send(<frec>)
+          end if
+          if recibi mensaje <frec'> del coordinador then
+            // se descartan los mensajes de los bizantinos
+            coord = frec'
+          else
+            coord = propInicial
+          end if
+          if src_latex{$num > \frac{n}{2} + t$} then
+            prop = frec
+          else
+            prop = coord
+          end if
+        end for
+        decide prop
+      #+end_lstlisting
+
+      #+begin_solution
+
+      #+end_solution
+
+   5. *(2 puntos)* El algoritmo de consenso bizantino visto en clase, resuelve el problema
+      del consenso bizantino para \(f < \frac{n}{4}\) procesos. Para valores
+      grandes de \(f\), el algoritmo podría fallar por violar una o más de las
+      propiedades de terminación, validez o acuerdo. Para este algoritmo:
+
+      - ¿Qué tan grande debe ser \(f\) para evitar terminación?
+      - ¿Qué tan grande debe ser \(f\) para evitar validez?
+      - ¿Qué tan grande debe ser \(f\) para evitar acuerdo?
+
+      Asuma que los procesos conocen la nueva cota \(f\), y cualquier umbral en
+      el algoritmo que use \(f\), se ajusta para corresponder con esta nueva
+      cota. Argumente detalladamente su respuesta.
+
+      #+begin_solution
+
+      #+end_solution
+
+
+* Examen 1 (Fecha de entrega: Sábado 15 de octubre del 2022 a las 23:59) :exam:unsolved:
+  :properties:
+  :export_file_name: artifacts/examen-1
+  :export_date: \today
+  :end:
+  #+call: togglesolutions()
+
+  Tus respuestas deben ser claras, concisas y con tus propias palabras. Es fácil
+  observar cuando una respuesta ha sido copiada. En caso de detectarse el caso
+  de copia, se cancelará el examen. Si entregas tu tarea escrita a mano, que tu
+  escritura sea legible, de otra forma el examen se2rá descartado.
+
+** Ejercicios
+
+1. *(2 puntos)* Da un algoritmo distribuido para contar el número de vértices en
+   un árbol enraízado \(T\), comenzando en la raíz. Al finalizar el algoritmo,
+   la raíz debe reportar el número de vértices del sistema. Muestra que tu
+   algoritmo es correcto.
+
+   #+begin_solution
+   #+end_solution
+
+2. *(2 puntos)* ¿El árbol generador de la figura [[fig:bfs]] puede obtenerse en alguna
+   ejecución del algoritmo BFS visto en clase? de ser el caso, describe la
+   ejecución, y de no serlo, explica por qué no se puede. Haz lo mismo con el
+   algoritmo DFS.
+
+   #+caption: Un árbol generador. La raíz se denota con un circulo.
+   #+attr_latex: :width 0.4\textwidth
+   #+label: fig:bfs
+   [[./figs/casita.png]]
+
+   #+begin_solution
+   #+end_solution
+
+3. *(3 puntos)* Se puede diseñar un algoritmo distribuido para construir un árbol
+   generador utilizando el algoritmo de elección de líder =eligeLider= para
+   determinar la raíz del árbol y también el algoritmo BFS. Describe un
+   algoritmo que utilice ambos algoritmo, de tal modo que se ejecuten de forma
+   paralela (por paralelo nos referimos a que ambos algoritmos se estén
+   ejecutando en una misma ronda). Muestra que tu algoritmo es correcto y da un
+   análisis de la complejidad de tiempo (rondas) de tu algoritmo.
+
+   #+begin_solution
+   #+end_solution
+
+4. *(1 punto)* Considera el algoritmo de BroadConvergecast visto en clase y prueba
+   el siguiente lema: ``Todo proceso \(p_i\) a profundidad \(D\) recibe el
+   mensaje \(<START>\) en tiempo \(D\)''.
+
+   #+begin_solution
+   Por inducción sobre D:
+
+   - Caso base :: \(D = 1\), todos los hijos de la raíz han recibido el
+     mensaje \(<START>\) en la ronda 1.
+   - Hipótesis de inducción :: Suponemos que todos los procesos a
+     profundidad \(D - 1\) han recibido el mensaje en tiempo \(D - 1\).
+   - Paso inductivo :: Consideremos un proceso \(p_j\) a distancia D del
+     proceso raíz. Dado que se encuentra a distancia \(D\), existe un proceso
+     a distancia \(D - 1\) de la raíz que es su PADRE y por H.I. este recibe
+     el mensaje \(<START>\) en la ronda \(D - 1\). Para la ronda \(D\), el
+     PADRE ejecuta la segunda parte del algoritmo y envía \(<START>\) a todos
+     sus hijos y en esa misma ronda \(p_j\) recibe el mensaje \(D\).
+   #+end_solution
+
+5. *(1 punto)* Describe brevemente el protocolo TCP. ¿Es posible resolver el
+   problema de los dos amantes si hay un canal TCP confiable entre ambos?
+
+   #+begin_solution
+
+   #+end_solution
+
+6. *(1 punto)* Contesta las siguientes preguntas:
+
+   1. ¿A qué nos referimos cuando hablamos de un resultado de imposibilidad en
+      computación distribuida? ¿En que nos ayuda tener esos resultados?
+
+      #+begin_solution
+
+      #+end_solution
+
+   2. ¿A qué nos referimos cuando hablamos del problema de indistinguibilidad en
+      un sistema distribuido?
+
+      #+begin_solution
+
+      #+end_solution
+
+
+* Examen 2 (Entrega el 13 de noviembre del 2022 a las 23:59) :exam:assignment:unsolved:
+  :properties:
+  :export_file_name: artifacts/examen-2
+  :export_date: \today
+  :end:
+  #+call: togglesolutions()
+
+  Tus respuestas deben ser claras, concisas y con tus propias palabras. Es fácil
+  observar cuando una respuesta ha sido copiada. En caso de detectarse el caso
+  de copia, se cancelará el examen. Si entregas tu tarea escrita a mano, que tu
+  escritura sea legible, de otra forma el examen se2rá descartado.
+
+** Preguntas
+
+   1. *(2 puntos)* Algunos procesos deterministas organizados en un anillo anónimo
+      síncrono reciben como entrada un entero (que puede o no ser distinto de
+      las entradas de otros procesos), pero por lo demás ejecutan el mismo
+      código y no conocen el tamaño del anillo. Nos gustaría que cada uno de los
+      procesos calcule la entrada máxima. Como es habitual, cada proceso solo
+      puede devolver una salida una única vez y debe hacerlo después de un
+      número finito de rondas, aunque puede continuar participando en el
+      protocolo (por ejemplo, retransmitiendo mensajes) incluso después de
+      devolver una salida.
+
+      Probar o refutar: Es posible resolver este problema en este modelo.
+
+   2. *(2 puntos)* Considera un sistema síncrono en el que los procesos fallan con
+      /paros limpios/, es decir, un proceso envía todos los mensajes o no
+      envía ninguno. Diseña un algoritmo que resuelva el problema del consenso
+      en una ronda.
+
+   3. *(2 puntos)* El algoritmo ref:alg:consensoasin describe un algoritmo para
+      acuerdo asíncrono con \(f\) fallas de tipo paro en una gráfica
+      completa. La idea es recolectar valores de \(n - f\) procesos en cada una
+      de las \(m\) rondas, y entonces decidir sobre el valor más pequeño
+      recolectado. El valor de \(m\) es un parámetro del algoritmo y podría
+      depender de \(n\) y \(f\).
+
+      La forma en que el algoritmo procesa los mensajes de la ronda \(i\)-ésima,
+      es que cualquier mensaje entregado con algún número de ronda distinto se
+      almacena en algún buffer internamente y son procesados cuando el algoritmo
+      esté listo para ellos.  Note que en el momento en que un proceso envía un
+      mensaje a todos los procesos, también se incluye a si mismo (considera el
+      valor que tiene para tomar la decisión del valor en cada ronda).
+
+      Muestre que para cualquier \(n\) y \(0 < f < \frac{n}{2}\), existe un
+      valor de m tal que el algoritmo ref:alg:consensoasin satisface acuerdo,
+      terminación y validez; o muestre como construir una ejecución para
+      cualquier \(n\), \(0 < f < \frac{n}{2}\) y \(m\) que cause que el
+      algoritmo ref:alg:consensoasin falla en alguno de esos requerimientos, es
+      decir, no resuelve el problema del consenso.
+
+      #+attr_latex: :options [caption=Algoritmo de consenso asíncrono, label=alg:consensoasin]
+      #+begin_lstlisting
+      preference = input
+      for i = 1 to m do:
+        send(src_latex{$<i, preference>$}) to all processes
+        wait to receive src_latex{$<i, v>$} from src_latex{$n - f$} processes
+        for each src_latex{$<i, v>$} received do
+          preference src_latex{$= \min(preference, v)$}
+      decide preference
+      #+end_lstlisting
+
+   4. *(2 puntos)* El algoritmo de consenso bizantino visto en clase, resuelve el
+      problema del consenso bizantino para \(f < \frac{n}{4}\) procesos. Para
+      valores más grandes de \(f\), el algoritmo podría fallar por violar una o
+      más de las propiedades de terminación, validez o acuerdo. Para este
+      algoritmo:
+
+      - ¿Qué tan grande debe ser \(f\) para evitar terminación?
+      - ¿Qué tan grande debe ser \(f\) para evitar validez?
+      - ¿Qué tan grande debe ser \(f\) para evitar acuerdo?
+
+      Asuma que los procesos conocen la nueva cota \(f\), y cualquier umbral en
+      el algoritmo que use \(f\), se ajusta para corresponder con esta nueva
+      cota. Argumente detalladamente su respuesta.
+
+   5. *(3 puntos)* Definamos el problema del /k-consenso/ (sincrono) como sigue:
+      Cada proceso inicia con un valor entero arbitrario \(x_i\) y debería
+      responder con un valor entero \(y_i\) tal que:
+
+      - Validez: \(y_i \in \{x_0, \ldots, x_{n - 1}\}\), y
+      - /K-acuerdo/: El número de diferentes valores de salida es a lo más \(k\).
+
+      Muestra que el algoritmo ref:alg:2 resuelve el problema del
+      \textit{k-consenso} en presencia de \(f\) fallas de tipo paro para
+      cualquier \(f < n\).  ¿Cuál es la complejidad de mensajes del algoritmo?
+
+      #+attr_latex: :options [caption=Algoritmo para el k-consenso con fallas de tipo paro., label=alg:2]
+      #+begin_lstlisting
+      Initially src_latex{$V=\{x\}$}
+      round r, src_latex{$1 \le r \le \frac{f}{k} + 1$}
+        Send V to all processors
+        src_latex{$S_j$} from src_latex{$p_j,\ 0 \le j \le n - 1, j \neq i$}
+        src_latex{$V = V \cup \bigcup_{j=0}^{n-1}S_j$}
+        if src_latex{$r = \frac{f}{k} + 1$} then y = min(V)
+      #+end_lstlisting
+
+
+* Temas de exposición (Lunes 5 al viernes 16 de diciembre del 2018) :exposicion:
+  :properties:
+  :export_file_name: artifacts/exposiciones
+  :export_date: \today
+  :end:
+
+** Introducción
+
+   Cada equipo tendrá 25 minutos para su exposición y deberá subir al classroom
+   un documento de tres páginas que explique lo más relevante del tema que les
+   tocó, a más tardar el dı́a de su exposición. El documento deberá tener la
+   siguiente estructura: Resumen, Introducción, Desarrollo, Conclusiones y
+   Referencias y deberá estar escrito en \LaTeX, usando la plantilla para
+   artı́culos.  Debido al tiempo limitado de la presentación, no es necesario
+   entrar en todos los detalles técnicos del tema, pero tu presentación debe de
+   incluir pero no limitarse a:
+
+   1. Título y autores del tema/artículo
+   2. Una descripción de alto nivel del resultado central/tópico del tema
+   3. Motivación de por qué  es interesante y/o difícil.
+   4. Una descripción (posiblemente también de alto nivel) de los mecanismos
+      utilizados para obtener el resultado.
+
+   Cuando tengan su tema elegido, manden un correo a Miguel con el tema
+   seleccionado.  Los temas se asignarán de manera FIFO. El material de
+   referencia para cada tema aparece entre paréntesis; si lo desean pueden usar
+   material adicional. Si tienen dudas pueden mandar un correo a Miguel para
+   coordinar una reunión.
+
+** Temas
+
+    - Coloración de gráficas (capítulo 7 en  cite:peleg2000distributed)
+    - Elección de lider (\cite{DBLP_journals_jpdc_Peleg90})
+    - Sincronizadores (secciones 9.1 a 9.3~\cite{DBLP_books_daglib_0032304})
+    - Esquemas de enrutamiento en redes (capítulo 9  en~\cite{peleg2000distributed}).
+    - Variantes del consenso (capítulo 12 en \cite{DBLP_books_sp_Raynal18})
+    - Algoritmo EIG de consenso bizantino (sección 14.4 en \cite{DBLP_books_sp_Raynal18})
+    - Aplicaciones de relojes vectoriales (sección 7.2 en~\cite{DBLP_books_daglib_0032304})
+    - Sincronización de relojes físicos (sección 6.3  en~\cite{DBLP_books_daglib_0017536})
+    - Implementación de \(\Omega\) con recuperación de fallas de tipo paro y fallas de omisión de mensajes (\cite{DBLP_journals_ipl_Fernandez-Campusano17})
+    - Teorema CAP: imposibilidad de consistencia, disponibilidad y tolerancia a particiones en sistemas distribuidos (\cite{DBLP_journals_sigact_GilbertL02}).
+    - Lógicas de conocimiento y sistemas distribuidos  (\cite{DBLP_reference_algo_Moses16})
+    - Topología y sistemas distribuidos (capítulo 1 en \cite{DBLP_books_mk_Herlihy2013})
+
+  #+bibliography: bibliography.bib
+  #+bibliographystyle: plain
 
 
 * Local variables                                                  :noexport:
