@@ -9,6 +9,7 @@
    #+startup: noptag overview hideblocks
    #+language: es
    #+OPTIONS: -:nil
+   #+BIND: org-latex-image-default-width "0.45\\linewidth"
 
 ** Org LaTeX Setup
 
@@ -18,17 +19,20 @@
    #+latex_header: \usepackage[AUTO]{babel}
    #+latex_header: \usepackage{mathtools}
    #+latex_header: \usepackage[capitalise,noabbrev]{cleveref}
+   #+latex_header: \usepackage{mdframed} \usepackage{svg}
    #+latex_header: \usepackage{environ} \NewEnviron{abmn}{\marginnote{\BODY}}
    #+latex_header: \usepackage{url}
    #+latex_header: \usepackage{color}
    #+latex_header: \usepackage{listings,chngcntr}% http://ctan.org/pkg/listings
    #+latex_header: \usepackage{multicol}
+   #+latex_header: \usepackage{url}
    #+latex_header: \lstset{ basicstyle=\ttfamily, mathescape=true, frame=Trbl, numbers=left}
    #+latex_header: \renewcommand{\thelstlisting}{\thesection.\arabic{lstlisting}}
    #+latex_header: \renewcommand{\lstlistingname}{Pseudocódigo}
    #+latex_header: \counterwithin{lstlisting}{section}
    #+latex_header: \setcounter{tocdepth}{1}
-   #+latex_header: \theoremstyle{plain}
+   #+latex_header: \newtheoremstyle{break}{\topsep}{\topsep}{\itshape}{}{\bfseries}{}{\newline}{}
+   #+latex_header: \theoremstyle{break}
    #+latex_header: \newtheorem{theorem}{Teorema}
    #+latex_header: \newtheorem{corollary}[theorem]{Corolario}
    #+latex_header: \newtheorem{proposition}[theorem]{Proposición}
@@ -40,11 +44,18 @@
    #+latex_header: \newtheorem{exmpl}{Ejemplo}
    #+latex_header: \theoremstyle{note}
    #+latex_header: \newtheorem{note}{Nota}
-   #+latex_header: \theoremstyle{remark}
+   #+latex_header: \theoremstyle{break}
    #+latex_header: \newtheorem{remark}{Observación}
    #+latex_header: \theoremstyle{exercise}
    #+latex_header: \newtheorem{exercise}{Ejercicio}
    #+latex_header: \usetikzlibrary{arrows,automata,positioning}
+   #+latex_header: \NewEnviron{obs}{\begin{mdframed}\begin{remark} \BODY \end{remark}\end{mdframed}}
+   #+latex_header: \NewEnviron{nota}{\begin{mdframed}\begin{note} \BODY \end{note}\end{mdframed}}
+   #+latex_header: \renewcommand{\qedsymbol}{\textbf{\therefore}}
+   #+latex_header: \NewEnviron{myproof}[1][\proofname]{\begin{proof}[#1]$ $\par\nobreak\ignorespaces}{\end{proof}}
+   #+latex_header: \NewEnviron{blk}{\begin{mdframed}\BODY\end{mdframed}}
+   #+latex_header: \newcommand{\nimplies}{\;\not\nobreak\!\!\!\!\implies}
+
 
 ** Export settings
 
@@ -54,7 +65,7 @@
    Add ~tufte-book~ to ~org-latex-classes~ and update ~org-latex-pdf-process~.
 
    #+name: export-setup
-   #+begin_src emacs-lisp :export results :resuts silent :var this-year="2022"
+   #+begin_src emacs-lisp :export results :resuts silent :var this-year="2023"
      (add-to-list 'org-latex-classes
                   `("tufte-book"
                     ,(string-join
@@ -82,7 +93,7 @@
                          "rm -rf %o/svg-inkscape"
                          "mv svg-inkscape %o/"
                          "rm -rf *.{aux,bbl,blg,fls,out,log,toc}"
-                         (concat "cp %o/%b.pdf docs/" this-year "/notes-distributed.pdf")))
+                         (concat "cp %o/%b.pdf ~/src/phd/docs/" this-year "/notes-distributed.pdf")))
                  org-latex-subtitle-format "\\\\\\medskip\\noindent\\Huge %s"
                  org-confirm-babel-evaluate nil)
    #+end_src
@@ -120,6 +131,20 @@
    la capacidad de cómputo que podemos ejecutar. Los programadores deben
    aprender a tomar ventaja de estas nuevas tecnologías.
 
+   Del libro de /Distributed Computing Pearls/
+   [[cite:&DBLP_series_synthesis_2018Taubenfeld]], tenemos la siguiente cita:
+
+   #+begin_quote
+   We point out that the use of the term synchronization in computer science is
+   slightly more general than its use in standard English. The following quote
+   from the Oxford dictionary explains this point, ``The use of synchronize to
+   mean coordinate or combine as in /We must synchronize our efforts/ is
+   considered incorrect by some people and should be avoided in standard
+   English.'' In computer science, synchronization also means coordination. That
+   is, synchronization between processors is classiﬁed as either contention or
+   coordination.
+   #+end_quote
+
 
 
 
@@ -127,6 +152,11 @@
 
 
 ** Construcciones básicas
+
+   Para nuestras construcciones básicas, tomaremos las definiciones descritas en
+   el libro [[cite:&DBLP_books_daglib_0032304]] en el capítulo 1. Esta definiciones
+   constituyen las herramientas básicas con las que estaremos trabajando durante
+   el curso.
 
 *** Definiciones
 
@@ -167,9 +197,9 @@
       proceso. Un autómata describe la secuencia de pasos ejecutados por el
       proceso correspondiente.
 
-      Adicional al poder de una máquina de Turing, un autómata es enriquecido con
-      dos operaciones de comunicación que permite enviar y recibir un mensaje en
-      cualquier canal. Estas operaciones son ~send()~ y ~receive()~.
+      Adicional al poder de una máquina de Turing, un autómata es enriquecido
+      con dos operaciones de comunicación que permite enviar y recibir un
+      mensaje en cualquier canal. Estas operaciones son ~send()~ y ~receive()~.
 
     - Algoritmo síncrono :: Es un algoritmo diseñado para ser ejecutado en un
       sistema distribuido síncrono. El progreso de tal sistema es gobernado por
@@ -177,29 +207,84 @@
       rondas/, donde cada ronda corresponde a un valor del reloj global.
 
       Durante una ronda, un proceso envía a lo más un mensaje a cada uno de sus
-      vecinos. La propiedad fundamental de un sistema síncrono, es que un mensaje
-      enviado por un proceso durante una ronda \(r\), es recibido por su proceso
-      de destino durante la misma ronda \(r\). De este modo, cuando un proceso
-      avanza a la ronda \(r + 1\), él ha recibido y procesado todos los mensajes
-      que hayan sido enviados durante la ronda \(r\).
+      vecinos. La propiedad fundamental de un sistema síncrono, es que un
+      mensaje enviado por un proceso durante una ronda \(r\), es recibido por su
+      proceso de destino durante la misma ronda \(r\). De este modo, cuando un
+      proceso avanza a la ronda \(r + 1\), él ha recibido y procesado todos los
+      mensajes que hayan sido enviados durante la ronda \(r\).
 
-    - Diagrama espacio-tiempo :: Una ejecución distribuida puede ser gráficamente
-      representada por lo que se conoce como diagrama espacio/tiempo. El tiempo
-      para cada proceso puede ser representado por una flecha de izquierda a
-      derecha, y un mensaje por otra flecha desde un proceso emisor a un proceso
-      receptor.
+    - Diagrama espacio-tiempo :: Una ejecución distribuida puede ser
+      gráficamente representada por lo que se conoce como diagrama
+      espacio/tiempo. El tiempo para cada proceso puede ser representado por una
+      flecha de izquierda a derecha, y un mensaje por otra flecha desde un
+      proceso emisor a un proceso receptor.
 
+    - Algoritmo asíncrono :: Un algoritmo distribuido /asíncrono/ es un algoritmo
+      diseñado para ser ejecutado sobre un sistema distribuido asíncrono. En tal
+      sistema no hay una noción de tiempo externo. Esto es el porqué los
+      sistemas asíncronos son llamados en ocasiones /sistemas libres de tiempo/.
 
-*** Algoritmos básicos y notación
+      En un sistema asíncrono, el progreso de un proceso es asegurado por su
+      propia computación y los mensajes que él recibe. Cuando un proceso recibe
+      un mensaje, el procesa el mensaje y, acorde a su algoritmo local,
+      posiblemente le envíe mensajes a sus vecinos.
 
+      Un proceso procesa un mensaje a la vez. Esto significa que el
+      procesamiento de un mensaje no puede ser interrumpido por el arribo de
+      otro mensaje. Cuando un mensaje llega, este es añadido a un buffer de
+      entrada del proceso receptor. El va a ser proceso después de todos los
+      mensajes que le preceden en este buffer y estos hayan sido procesados.
+
+*** Motivación
+
+    - Generales bizantinos
+    - Commit distribuido
+    - Dilema de los prisioneros
+
+*** Modelo
+
+    - Coordinación de los generales
+    - Dilema de los prisioneros
+    - Indistinguibilidad e incertidumbre
+
+**** Modelos de cómputo distribuido
+
+     - Modelo síncrono sin fallas
+     - Modelo síncrono con fallas de los procesos
+       - Fallas de tipo paro
+       - Fallas bizantinas
+     - Modelo asíncrono con fallas de los procesos
+     - Modelo semi-síncrono con fallas de los mensajes
 
 *** Algoritmo de los generales
 
-    Descripción
+    #+attr_latex: :options [caption=Algoritmo de los generales]
+    #+begin_lstlisting
+    Algoritmo Generales(ID, Input):
+      Ejecutar inicialmente:
+        if ID == A then: // Soy el líder
+          send(<input>, 1)
+
+      Esperar hasta recibir un mensaje del puerto 1:
+        M = mensaje recibido
+        Atacar a las M horas
+        send(<ok>, 1)
+    #+end_lstlisting
+
 
 *** Algoritmo de la cadena
 
-    Descripción
+    #+attr_latex: :options [caption=Algoritmo de la cadena]
+    #+begin_lstlisting
+    Algoritmo Cadena(ID):
+      Ejecutar inicialmente:
+        if ID == 1 then: // Soy el líder
+          send(<ID>) por todos los puertos
+
+      Esperar hasta recibir algún mensaje <M> por algún puerto:
+        if ID == M + 1 then:
+          send(<ID>) por todos los puertos
+    #+end_lstlisting
 
 
 *** Broadcast y convergecast
@@ -248,13 +333,13 @@
     mensaje a sus vecinos \(q_1\) y \(q_2\) como lo observamos en el
     cref:ex:round1.
 
-    #+begin_abmn
-    #+begin_remark
+    #+begin_obs
+    Recordemos lo que es un sistema síncrono y el concepto de localidad.
+
     - Sistema síncrono :: Los procesos se ejecutan a la misma velocidad y los
       mensajes llegan de un proceso a otro en una unidad de tiempo.
     - Localidad :: Inicialmente los procesos tienen una vista local del sistema.
-    #+end_remark
-    #+end_abmn
+    #+end_obs
 
     Para la segunda ronda, ahora los vecinos de los vecinos de
     \(q_0\) comienzan a desplegar los mensajes como se observa en
@@ -296,7 +381,6 @@
          (q10) edge node{} (q11);
        \end{tikzpicture}
      \end{center}
-
      #+end_exmpl
 
      #+begin_exmpl
@@ -421,14 +505,16 @@
     Vamos a medir la complejidad de nuestros algoritmos basándonos en dos tipos
     de medidas: El tiempo y la cantidad de mensajes.
 
-    #+begin_abmn
-    #+begin_remark
-    \begin{enumerate}
-      \item Desestimamoms el tiempo de computación local. Asumimos que sucede instantáneamente.
-      \item En la complejidad de mensajes, también es importante pensar en el tamaño de los mensajes, es decir, ¿Cuántos bits se enviaron?, ¿El canal de comunicación tiene un límite en el ancho de banda?
-    \end{enumerate}
-    #+end_remark
-    #+end_abmn
+
+    #+begin_obs
+    Es importante observar que:
+
+      - Desestimamos el tiempo de computación local. Asumimos que sucede
+        instantáneamente.
+      - En la complejidad de mensajes, también es importante pensar en el tamaño
+        de los mensajes, es decir, ¿Cuántos bits se enviaron?, ¿El canal de
+        comunicación tiene un límite en el ancho de banda?
+    #+end_obs
 
     1. Complejidad de tiempo: Es el tiempo del último evento. Generalmente es el
        número de rondas hasta que un protocolo termine.
@@ -437,29 +523,26 @@
     Regresando al algoritmo de Flooding, podemos enunciar el siguiente teorema:
 
     #+begin_theorem
+    label:teo:flood
     Todo proceso recibe el mensaje \(M\) en a los más tiempo \(D\) y a lo más
     \(2|E|\) mensajes, donde \(D\) es el tamaño de la gráfica y \(E\) es el
     conjunto de aristas. Asumimos que la gráfica es conexa.
-    #+begin_abmn
-    #+begin_remark
+    #+begin_obs
+    Antes de demostrar el teorema ref:teo:flood, es importante recordar que:
+
     1. La distancia entre 2 vértices en una gráfica \(G\), denotado como \(d(u,
        v)\), es la longitud del camino más corto entre ellos.
     2. El diámetro de una gráfica \(G\), denotado como \(diam(G)\) es
         \(\max\limits_{\forall u, v \in G} d_G(u, v)\)
-    #+end_remark
-    #+end_abmn
+    #+end_obs
     #+end_theorem
 
     #+begin_proof
-    /Complejidad de los mensajes:/
+    /Complejidad de los mensajes:/ Cada proceso sólo envía una copia de
+    \(M\) a sus vecinos, así que cada arista transporta a lo más una copia de
+    \(M\). Por lo que a lo más la cantidad de mensajes enviados es \(2|E|\).
 
-    Cada proceso sólo envía una copia de \(M\) a sus vecinos, así que cada
-    arista transporta a lo más una copia de \(M\). Por lo que a lo más la
-    cantidad de mensajes enviados es \(2|E|\).
-
-    /Complejidad de tiempo:/
-
-    Por inducción en la distancia del líder a los demás:
+    /Complejidad de tiempo:/ Por inducción en la distancia del líder a los demás:
 
     - Caso base :: \(d = 0 \rightarrow\) El líder es el único proceso en el
       sistema, el cuál claramente, tiene el mensaje \(M\) en el tiempo cero.
@@ -485,12 +568,11 @@
     #+end_abmn
     #+end_corollary
 
-    #+begin_abmn
-      #+begin_remark
-        En computación distribuida, *desestimamos el tiempo de cómputo
-        local*. Particularmente pensamos que *sucede instantáneamente*.
-      #+end_remark
-    #+end_abmn
+    #+begin_obs
+    En computación distribuida, *desestimamos el tiempo de cómputo
+    local*. Particularmente pensamos que *sucede instantáneamente*.
+    #+end_obs
+
 
     El algoritmo de /flooding/ no es muy eficiente, ya que utiliza \(2|E|\)
     mensajes (con \(E\) el número de canales/aristas) para diseminar un mensaje
@@ -572,19 +654,21 @@
 
     Un pequeño recordatorio de definiciones sobre árboles.
 
-    - Árbol :: Gráfica conexa sin ciclos. [[cref:ex:tree]].
+    - Árbol :: Gráfica conexa sin ciclos. Observamos un ejemplo de este en [[cref:ex:tree]].
     - Árbol generador :: subgráfica que toca todos los vértices en una gráfica G
-      y es un árbol. [[cref:ex:spanningTree]].
+      y es un árbol.
     - Árbol con raíz :: Árbol con un vértice distinguido, la raíz. Cada proceso
       \(p_i\) tiene un sólo padre, localmente denotado como \(parent_i\) y un
       conjunto (posiblemente vacío) de hijos, denotado como \(children_i\). El
-      padre del nodo distinguido es el mismo. [[cref:ex:spanningTree]].
+      padre del nodo distinguido es el mismo. Podemos observar un ejemplo de ese
+      y del árbol generador en [[cref:ex:spanningTree]].
 
     Modifiquemos el algoritmo de ~Flooding~ para construir un árbol
     generador. Es fácil probar que este algoritmo tiene las mismas propiedades
     que el algoritmo de ~Flooding~.
 
-    #+begin_example
+    #+attr_latex: :options [caption=Algoritmo de Árbol generador]
+    #+begin_lstlisting
     Algoritmo BuildSpanningTree(ID, root, M):
         Parent = null
         Ejecutar inicialmente:
@@ -592,10 +676,10 @@
                 Parent = null
                 send(<M>) por todos los puertos
         Al recibir <M> por algún puerto P:
-            if Parent == \(\bot\):
+            if Parent == src_latex{$\bot$}:
                 Parent = P
                 send(<M>) por todos los puertos
-    #+end_example
+    #+end_lstlisting
 
     Podemos observar que el algoritmo ~BuildSpanningTree~ tiene una propiedad
     adicional, cuando el algoritmo se queda *quieto* (quiescent state), es decir,
@@ -652,17 +736,26 @@
     profundidad mínima posible, entonces necesitaremos hacer cosas más
     sofisticadas.
 
-    *Estructura de árbol distribuido*
-
-    \(\forall\) proceso \(\in G\):
+    #+begin_blk
+    *Estructura de árbol distribuido*, \(\forall\) proceso \(\in G\):
 
     1. Tiene una variable (\(soyRaiz\)) que indica si es la raíz del árbol.
     2. Tiene una variable \(PADRE\) que indica el puerto que conecta con su
        padre.
     3. Tiene un conjunto \(HIJOS\) con todos los puertos que conectan a sus
        hijos en el árbol.
+    #+end_blk
 
-    #+begin_abmn
+    #+begin_blk
+    Dado un árbol \(T\) con \(raíz\):
+
+    1. Profundidad de un nodo \(v\): distancia de la \(raíz\) a \(v\).
+    2. Profundidad de \(T\): máximo de las profundidades.
+    3. Altura de \(v\): distancia de \(v\) a sus hojas.
+    4. Altura de \(T\): máximo de las alturas.
+    #+end_blk
+
+    #+begin_obs
     Formato en que un proceso almacena información
 
     Proceso {
@@ -670,42 +763,18 @@
       HIJOS: {6, 5},
       soyRaiz: false
     }
-    #+end_abmn
-
-    Dado un árbol \(T\) con \(raíz\):
-
-    1. Profundidad de un nodo \(v\): distancia de la \(raíz\) a \(v\).
-    2. Profundidad de \(T\): máximo de las profundidades.
-    3. Altura de \(v\): distancia de \(v\) a sus hojas.
-    4. Altura de \(T\): máximo de las alturas.
+    #+end_obs
 
 
 *** Broadcast
 
     Regresando al problema inicial de /broadcasting/, diseñamos un algoritmo que
     nos permita diseminar algún mensaje \(<M>\). Para ello, supondremos que
-    sobre la gráfica que modela nuestro sistema, ya construimos un árbol
-    generador.
+    sobre ya construimos un árbol generador para la gráfica que modela nuestro
+    sistema.
 
-    #+begin_abmn
-    #+begin_remark
-      Flooding
-        + Tiempo(Flooding) \(\le diam(G)\)
-        + Mensajes \(\le 2|E|\)
-      BroadcastTree
-        + Tiempo(BroadcastTree) \(= Prof(T)\)
-        + Mensajes \(= |V| - 1\)
-    #+end_remark
-    #+end_abmn
-
-    #+begin_abmn
-    #+begin_exercise
-    ¿Cuál sería el peor caso en complejidad de tiempo para el algoritmo
-    ~BroadcastTree~? Explica detalladamente.
-    #+end_exercise
-    #+end_abmn
-
-    #+begin_example
+    #+attr_latex: :options [caption=Algoritmo BroadcastTree]
+    #+begin_lstlisting
     Algoritmo BroadcastTree(ID, soyRaiz, M):
         PADRE, HIJOS
 
@@ -714,7 +783,7 @@
                 send(<M>) a todos los HIJOS
         Al recibir <M> de PADRE:
             send(<M>) a todos los HIJOS
-    #+end_example
+    #+end_lstlisting
 
     #+begin_exmpl
      label:ex:broadcastexec
@@ -759,24 +828,38 @@
      \end{center}
      #+end_exmpl
 
+    #+begin_obs
+    Recordemos la complejidad de tiempo y de mensajes de los algoritmos de
+    Flooding y BroadcastTree
+      - Flooding
+        - Tiempo(Flooding) \(\le diam(G)\)
+        - Mensajes \(\le 2|E|\)
+      - BroadcastTree
+        - Tiempo(BroadcastTree) \(= Prof(T)\)
+        - Mensajes \(= |V| - 1\)
+    #+end_obs
+
+    #+begin_exercise
+    ¿Cuál sería el peor caso en complejidad de tiempo para el algoritmo
+    ~BroadcastTree~? Explica detalladamente.
+    #+end_exercise
 
 *** ConvergeCast
 
     Proceso dual al broadcast. Ahora los proceso tienen que enviar información a
     la raíz.
 
-    #+begin_abmn
-    #+begin_remark
+    #+begin_obs
       Proponemos una solución que utiliza una técnica de agregación para el uso
       de convergecast.
 
       - Tiempo(Convergecast) \(= Prof(T)\)
       - Mensajes \(|V| - 1\)
-    #+end_remark
-    #+end_abmn
+    #+end_obs
 
-    #+begin_example
-    Algoritmo Convercast(ID, soyRaiz):
+    #+attr_latex: :options [caption=Algoritmo convergecast]
+    #+begin_lstlisting
+    Algoritmo Convergecast(ID, soyRaiz):
         PADRE, HIJOS, noRecibidos = 0
 
         Ejecutar inicialmente:
@@ -787,7 +870,7 @@
             noRecibidos++
             if noRecibidos == |HIJOS|:
                 send(<ok>) a PADRE
-    #+end_example
+    #+end_lstlisting
 
 
 *** Broadconvergecast
@@ -798,23 +881,9 @@
     este puede ser utilizado para futuras invocaciones de broadcast y
     convergecast utilizando el mismo proceso distinguido \(p_a\).
 
-    #+begin_abmn
-    #+begin_remark
-    Algunos de los protocolos de red que se inspiran en broadcasting y
-    convergecast son:
 
-    \begin{itemize}
-      \item DNS / DNS Caching
-      \item DHCP
-      \item ARP
-    \end{itemize}
-
-    Más información en el libro de "Computer Networking" de James F. Kurose, Keit
-    W. Ross, 8ed. secciones 2.4, 6.4 y 6.7.
-    #+end_remark
-    #+end_abmn
-
-    #+begin_example
+    #+attr_latex: :options [caption=Algoritmo Broadconvergecast]
+    #+begin_lstlisting
     Algoritmo BroadConvergeCast(ID, SoyRaiz):
         PADRE, HIJOS, noVecinos = 0
 
@@ -835,7 +904,7 @@
                     reportar terminación
                 else
                     send(<OK>) a PADRE
-    #+end_example
+    #+end_lstlisting
 
 
    #+begin_lemma
@@ -860,6 +929,19 @@
     #+end_abmn
     #+end_lemma
 
+    #+begin_nota
+    Algunos de los protocolos de red que se inspiran en broadcasting y
+    convergecast son:
+
+    \begin{itemize}
+      \item DNS / DNS Caching
+      \item DHCP
+      \item ARP
+    \end{itemize}
+
+    Más información en el libro de "Computer Networking" de James F. Kurose, Keit
+    W. Ross, 8ed. secciones 2.4, 6.4 y 6.7.
+    #+end_nota
 
 
 *** Cómputo por agregación
@@ -879,8 +961,8 @@
     acumulación \(acc\), de modo que en cada respuesta devolvamos una evaluación
     parcial de nuestros subárboles.
 
-
-    #+begin_example
+    #+attr_latex: :options [caption=Algoritmo broadconvergecast adaptado para realizar computo por agregación.]
+    #+begin_lstlisting
     Algoritmo BroadConvergecast(ID, soyRaiz, valor):
         PADRE, HIJOS, noVecinos = 0, acc = valor
 
@@ -903,7 +985,7 @@
               return acc
             else
               send(<OK, acc>) a PADRE
-    #+end_example
+    #+end_lstlisting
 
     ¿Qué tipo de operaciones/funciones podemos utilizar con esta técnica?
 
@@ -913,17 +995,15 @@
     - Máximos
     - Mínimos
 
-    En la figura [[fig:compAggr]], podemos observar un ejemplo de esta
-    técnica. Para simplificar la ejecución, se asume que la gráfica corresponde
-    al árbol generador de alguna gráfica. En este ejemplo, el proceso con el
-    valor 2, que se encuentra en la parte superior de la figura, corresponde con
-    el proceso distinguido.
-
-    El sistema distribuido ejecutará una suma distribuida. El valor final de la
-    ejecución será 21.
+    En la figura [[fig:compAggr]], podemos observar un ejemplo de esta técnica. Para
+    simplificar la ejecución, se asume que la gráfica corresponde al árbol
+    generador de alguna gráfica. En este ejemplo, el proceso con el valor 2, que
+    se encuentra en la parte superior de la figura, corresponde con el proceso
+    distinguido.  El sistema distribuido ejecutará una suma distribuida. El
+    valor final de la ejecución será 21.
 
     #+CAPTION: Ejemplo de ejecución de una suma distribuida. Cada proceso tiene un valor de entrada.
-    #+ATTR_LaTeX: scale=0.9\textwidth
+    #+ATTR_LaTeX: scale=0.45\textwidth
     #+LABEL: fig:compAggr
     [[./figs/dibujo27.png]]
 
@@ -933,11 +1013,14 @@
     las entradas en el subárbol con raíz en el proceso \(p\).
     #+end_lemma
 
-    Podemos observar que las complejidades para el algoritmo de
+    #+begin_obs
+    Las complejidades de tiempo y mensajes para el algoritmo de
     broadConvergecastTree es
 
     - Tiempo \(= 2 * Prof(T)\)
     - Mensajes \(= 2 * (|V| - 1)\)
+    #+end_obs
+
 
 
 *** Elección de líder
@@ -948,24 +1031,21 @@
     siguiente:
 
 
-    #+attr_latex: :options [caption=Algoritmo de elección de líder]
+    #+attr_latex: :options [caption=Algoritmo de elección de líder. ID \(\in \mathbb{N}\). \(total \coloneqq |V|\). \(d\) grado del vértice.]
     #+begin_lstlisting
     Algoritmo eligeLider(ID, total):
     Lider = ID, ronda = 0
 
     Ejecutar en todo momento src_latex{$t \ge\ 0$}:
-    send(<Lider>) a todos los vecinos
+      send(<Lider>) a todos los vecinos
 
     Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
-    Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
-    Lider = max(mensajes)
-    ronda = ronda + 1
-    if ronda == total then
-    terminar algoritmo
+      Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
+      Lider = max(mensajes)
+      ronda = ronda + 1
+      if ronda == total then
+        terminar algoritmo
     #+end_lstlisting
-    #+begin_abmn
-    ID \(\in \mathbb{N}\), total = \(|V|\), \(d\) grado del vértice
-    #+end_abmn
 
     Consideremos la gráfica mostrada en la figura [[fig:graphLider]] y utilizando la
     gráfica de espacio-tiempo, podemos observar la dinámica del envío de mensajes
@@ -974,12 +1054,12 @@
     comienza a ser cada vez más estable.
 
     #+CAPTION: Gráfica sobre la que se ejecutará el algoritmo de elección de líder.
-    #+ATTR_LaTeX: scale=0.9\textwidth
+    #+attr_latex: :width .45\linewidth
     #+LABEL: fig:graphLider
     [[./figs/dibujo31.png]]
 
     #+CAPTION: Dinámica de intercambio de mensajes durante la ejecución del algoritmo de elección de líder.
-    #+ATTR_LaTeX: scale=0.9\textwidth
+    #+ATTR_LaTeX: :width .7\linewidth
     #+LABEL: fig:spaceTimeLeader
     [[./figs/dibujo32.png]]
 
@@ -989,8 +1069,13 @@
     - Acuerdo :: Todos los procesos acuerdan un mismo valor.
     - Validez :: Al terminar la ejecución del algoritmo, todos los procesos tiene
       como lider un ID que fue entrada de algún proceso.
+
+    #+begin_obs
+    Complejidad de tiempo y mensajes para elección de líder.
+
     - Tiempo = \(d\) // Distancia máxima respecto al proceso con ID máximo
     - Mensajes = \(2*d*|E|\)
+    #+end_obs
 
     Para probar que este algoritmo es correcto, hay que mostrar se cumple el
     acuerdo y la validez.
@@ -1001,6 +1086,8 @@
     #+end_affirmation
 
     #+begin_proof
+    Verificaremos que se cumplen las propiedades de acuerdo y validez.
+
     - Acuerdo :: Al terminar cualesquiera 2 procesos \(p_i\) y \(p_j\) con
       variables \(Lider_i\) y \(Lider_j\), se cumple: \(Lider_i == Lider_j\)
 
@@ -1062,7 +1149,7 @@
     #+end_definition
 
 
-    #+attr_latex: :options [caption=Algoritmo BFS]
+    #+attr_latex: :options [caption=Algoritmo BFS. \(ID \in \mathbb{N}\). soyLider :: Boolean]
     #+begin_lstlisting
     Algoritmo BFS(ID, soyLider):
       src_latex{$Padre = \bot$}
@@ -1093,20 +1180,14 @@
           Terminar
     #+end_lstlisting
 
-    #+begin_abmn
-    \(ID \in \mathbb{N}\), soyLider :: Boolean
-    #+end_abmn
-
     Podemos observar la ejecución del algoritmo BFS sobre la gráfica mostrada en
     la figura [[fig:BFS]]. También cuales son los estados de las variable =Padre=,
     =Hijos= y =Otros=.
 
     #+CAPTION: Ejecución del algoritmo BFS distribuido con proceso distinguido A
-    #+ATTR_LaTeX: scale=0.9\textwidth
+    #+ATTR_LaTeX: scale=0.45\textwidth
     #+LABEL: fig:BFS
     [[./figs/dibujoBFS.png]]
-
-
 
     #+begin_affirmation
     Podemos observar que en toda ejecución, el algoritmo BFS construye un árbol
@@ -1124,31 +1205,24 @@
     \(p_j\) es hijo de \(p_i\), entonces, \(p_i\) es padre de \(p_j\). Mostramos
     que la gráfica resultante G', es un árbol con raíz.
 
-    Nos preguntamos: /¿Todo nodo es alcanzable desde la raíz si el sistema es
-    conexo?/
+    - /¿Todo nodo es alcanzable desde la raíz si el sistema es conexo?/ Supongamos
+      por contradicción que algún nodo no es alcanzable por la raíz en G. Dado
+      que el sistema es conexo, existen dos procesos \(p_i\) y \(p_j\) con un
+      canal entre ellos tal que \(p_j\) es alcanzable desde la raíz, pero
+      \(p_i\) no.  Esto implica que, durante la ejecución del algoritmo, el
+      padre de \(p_i\) se mantiene nulo \(\bot\) y el padre de \(p_j\) se
+      establece en algún momento. Entonces, \(p_j\) eventualmente ejecuta la
+      línea 15, por lo que el mensaje es recibido por \(p_i\), estableciendo la
+      variable Padre. *Contradicción*.
 
-    Supongamos por contradicción que algún nodo no es alcanzable por la raíz en
-    G. Dado que el sistema es conexo, existen dos procesos \(p_i\) y \(p_j\) con
-    un canal entre ellos tal que \(p_j\) es alcanzable desde la raíz, pero
-    \(p_i\) no.
-
-    Esto implica que, durante la ejecución del algoritmo, el padre de \(p_i\) se
-    mantiene nulo \(\bot\) y el padre de \(p_j\) se establece en algún
-    momento. Entonces, \(p_j\) eventualmente ejecuta la línea 15, por lo que el
-    mensaje es recibido por \(p_i\), estableciendo la variable
-    Padre. *Contradicción*.
-
-    /No hay ciclos (el resultado es un árbol)/.
-
-    Supongamos por contradicción que hay algún ciclo \(p_{i1}, p_{i2}, \ldots,
-    p_{ik}, p_{i1}\). Notemos que si \(p_i\) es un hijo de \(p_j\), entonces,
-    \(p_i\) recibe \(<BFS, j>\) por primera vez, esto después de que \(p_j\) lo
-    reciba.
-
-    Dado que cada proceso es padre del siguiente proceso en el ciclo, esto
-    significaría que \(p_{i1}\) reciba el mensaje por primera vez antes de que
-    \(p_{i1}\) (el mismo), lo reciba posteriormente, causando que tenga dos padre
-    y por la linea 12, esto no es posible. *Contradicción*.
+    - /No hay ciclos (el resultado es un árbol)/.  Supongamos por contradicción
+      que hay algún ciclo \(p_{i1}, p_{i2}, \ldots, p_{ik}, p_{i1}\). Notemos
+      que si \(p_i\) es un hijo de \(p_j\), entonces, \(p_i\) recibe \(<BFS,
+      j>\) por primera vez, esto después de que \(p_j\) lo reciba.  Dado que
+      cada proceso es padre del siguiente proceso en el ciclo, esto significaría
+      que \(p_{i1}\) reciba el mensaje por primera vez antes de que \(p_{i1}\)
+      (el mismo), lo reciba posteriormente, causando que tenga dos padre y por
+      la linea 12, esto no es posible. *Contradicción*.
     #+end_proof
 
     #+begin_affirmation
@@ -1157,7 +1231,7 @@
     tiempo O(D).
     #+end_affirmation
 
-    #+begin_abmn
+    #+begin_nota
     El algoritmo BFS construido a partir del algoritmo de Flooding,
     garantiza que al menos para el caso síncrono, se construya un árbol BFS. En
     el caso asíncrono no hay ninguna garantía.
@@ -1166,7 +1240,8 @@
     las versiones secuenciales del algoritmo de Dijsktra y de Bellman-Ford. Más
     información en el capítulo 5 del libro =Distributed Computing: A
     Locality-sensitive approach= de David Peleg, año 2000
-    #+end_abmn
+    [[cite:&doi_10_1137_1_9780898719772]].
+    #+end_nota
 
     #+begin_affirmation
     El algoritmo BFS construye un árbol BFS con raíz en el proceso marcado como
@@ -1251,17 +1326,16 @@
     #+end_affirmation
 
     #+caption: Ejecución del algoritmo DFS distribuido con proceso distinguido A
-    #+attr_latex: scale=0.9\textwidth
+    #+attr_latex: scale=0.45\textwidth
     #+label: fig:DFS
     [[file:figs/dibujoDFS.png]]
 
 
 *** Elección de líder
 
-    Problema en el que un conjunto de procesos tienen que elegir entre ellos a un
-    líder.
-
-    ¿Por qué es importante?
+    Retomaremos el problema de elección de líder. Este problema radica en que un
+    conjunto de procesos tienen que elegir entre ellos a un líder. /¿Por qué es
+    importante?/
 
     - Ayuda a simplificar la *coordinación* entre procesos.
     - Ayuda a alcanzar *tolerancia a fallos*.
@@ -1272,28 +1346,24 @@
     no-líderes pueden o no conocer la identidad del líder como parte del
     protocolo (algoritmo). Si no lo conocieran y quisiéramos que lo hicieran,
     siempre podemos añadir una fase extra donde el líder difunden (broadcast) su
-    identidad.
-
-    Tradicionalmente, la elección de líder ha sido utilizada para estudiar
-    efectos de simetría y varios de los algoritmos de elección de líder fueron
-    diseñados para redes de tipo anillo.
-
-    Se dice que un algoritmo resuelve el problema de la elección de líder si
-    satisface:
+    identidad.  Tradicionalmente, la elección de líder ha sido utilizada para
+    estudiar efectos de simetría y varios de los algoritmos de elección de líder
+    fueron diseñados para redes de tipo anillo. Se dice que un algoritmo
+    resuelve el problema de la elección de líder si satisface:
 
     - Los estados finales (de los procesos) son particionados en estados electos
       y no electos.
     - En toda ejecución admisible, exactamente un proceso (el líder) entra en un
       *estado electo* y todos los demás procesos entran en un *estado no electo*.
 
-    - Modelo :: Asumimos que las aristas de la gráfica van entre \(p_i\) y
+    - *Modelo* :: Asumimos que las aristas de la gráfica van entre \(p_i\) y
       \(p_{i+1}\ \forall\ 0 \le i < n\), con la adicción módulo n. Además, los
       procesos tienen una noción consistente de izquierda y derecha, resultando
       en un anillo orientado. Podemos observar un ejemplo en la figura
       [[fig:anillo]].
 
     #+caption: Ejemplo del modelo de anillo distribuido
-    #+attr_latex: scale=0.5\textwidth
+    #+attr_latex: :width 0.6\linewidth
     #+label: fig:anillo
     [[file:figs/anillo.png]]
 
@@ -1303,7 +1373,6 @@
     que todos los procesos en la misma clase de equivalente ejecutan el mismo
     código y cuando \(p\) es equivalente a \(p'\), cada vecino \(q\) de \(p\) es
     equivalente a un vecino correspondiente \(q'\) de \(p'\).
-
     Un ejemplo de una red con un montón de simetrías es un anillo anónimo.
 
     - Un anillo es anónimo, si los procesos no tienen identificadores únicos que
@@ -1319,20 +1388,17 @@
 
     Las simetrías son útiles para probar resultados de imposibilidad. Uno de
     nuestros primeros resultados de imposibilidad que mostraremos es que no
-    existe un algoritmo de elección de líder para anillos anónimos.
-
-    La idea es mostrar que en un anillo anónimo, la simetría entre los procesos
-    siempre se mantiene, esto es, sin alguna asimetría inicial, como la que
-    pueden proveer los id únicos, la simetría no puede ser rota.
-
-    Como todos los procesos inician en el mismo estado, ellos son idénticos y
-    ejecutan el mismo programa, en cada ronda, ellos envían el mismo mensaje y en
-    cada ronda reciben los mismos mensajes, por lo que su estado no cambia.
-
-    Entonces, si alguno de los procesos es elegido como lider, entonces todos los
-    procesos son elegidos. Por lo que es imposible tener un algoritmo que elija
-    un sólo lider. El siguiente lema se cumple para sistemas deterministas. Antes
-    de probar el lema, algunas suposiciones acerca del modelo con el que
+    existe un algoritmo de elección de líder para anillos anónimos.  La idea es
+    mostrar que en un anillo anónimo, la simetría entre los procesos siempre se
+    mantiene, esto es, sin alguna asimetría inicial, como la que pueden proveer
+    los id únicos, la simetría no puede ser rota.  Como todos los procesos
+    inician en el mismo estado, ellos son idénticos y ejecutan el mismo
+    programa, en cada ronda, ellos envían el mismo mensaje y en cada ronda
+    reciben los mismos mensajes, por lo que su estado no cambia.  Entonces, si
+    alguno de los procesos es elegido como lider, entonces todos los procesos
+    son elegidos. Por lo que es imposible tener un algoritmo que elija un sólo
+    lider. El siguiente lema se cumple para sistemas deterministas. Antes de
+    probar el lema, algunas suposiciones acerca del modelo con el que
     trabajamos.
 
     - Anillo anónimo \(R\) de tamaño \(n > 1\)
@@ -1392,7 +1458,7 @@
           send(src_latex{$<j>$}) al vecino en el sentido de las manecillas del reloj
     #+end_lstlisting
 
-* Tolerancia a Fallos
+* Sistemas síncronos
 
 ** Consenso tolerante a fallos
 
@@ -1430,130 +1496,128 @@
      tiene un servicio siempre disponible a pesar de los múltiples tipos de
      errores que pueden ocurrir.
 
-** El problema del consenso
+*** El problema del consenso
 
-   Cada proceso tiene una entrada, un valor que propone para el
-   consenso. Buscamos un algoritmo que satisfaga lo siguiente:
+    Cada proceso tiene una entrada, un valor que propone para el
+    consenso. Buscamos un algoritmo que satisfaga lo siguiente:
 
-   - Terminación :: Todo _proceso que es correcto_, elige un propuesta.
-   - Validez :: Todo valor elegido _fue propuesto_ por un proceso.
-   - Acuerdo :: Todo _par de valores_ elegidos son idénticos.
+    - Terminación :: Todo _proceso que es correcto_, elige un propuesta.
+    - Validez :: Todo valor elegido _fue propuesto_ por un proceso.
+    - Acuerdo :: Todo _par de valores_ elegidos son idénticos.
 
-   *Modelo A*: Sistema síncrono sin fallas y gráfica completa (\(k_n\)).
+    *Modelo A*: Sistema síncrono sin fallas y gráfica completa (\(k_n\)).
 
-   #+attr_latex: :options [caption=Algoritmo de consenso 1 en el modelo A]
-   #+begin_lstlisting
-   Algoritmo consenso1(src_latex{$v_i$})
-     Inicialmente:
-       send(src_latex{$<v_i>$}) a todos los vecinos
+    #+attr_latex: :options [caption=Algoritmo de consenso 1 en el modelo A]
+    #+begin_lstlisting
+    Algoritmo consenso1(src_latex{$v_i$})
+      Inicialmente:
+        send(src_latex{$<v_i>$}) a todos los vecinos
 
-     Al recibir mensaje de todos los vecinos:
-       vista = src_latex{$\{v_1,\ v_2,\ \ldots,\ v_d\} \cup v_i$}
-       decision = min(vista)
-   #+end_lstlisting
-   #+begin_abmn
-   Podemos utilizar cualquier función \(f(v_1,\ \ldots,\ v_n)\) determinista.
-   #+end_abmn
+      Al recibir mensaje de todos los vecinos:
+        vista = src_latex{$\{v_1,\ v_2,\ \ldots,\ v_d\} \cup v_i$}
+        decision = min(vista)
+    #+end_lstlisting
+    #+begin_nota
+    Podemos utilizar cualquier función \(f(v_1,\ \ldots,\ v_n)\) determinista
+    para calcular la decisión en el algoritmo =consenso 1=.
+    #+end_nota
 
-   #+begin_affirmation
-   El algoritmo =consenso 1= soluciona el problema del consenso.
-   #+end_affirmation
+    #+begin_affirmation
+    El algoritmo =consenso 1= soluciona el problema del consenso.
+    #+end_affirmation
 
-   #+begin_proof
-   Probaremos que se cumple terminación, validez y acuerdo.
+    #+begin_proof
+    Probaremos que se cumple terminación, validez y acuerdo.
 
-   - Terminación :: Al operar en un sistema síncrono, el algoritmo termina en
-     dos rondas, eligiendo una propuesta [ =min(vista)= ].
-   - Validez :: El conjunto vista tiene valores propuestos por los vecinos, por
-     lo que =min(vista)= es una propuesta de algún vecino.
-   - Acuerdo :: Como \(G = k_n\) y sin fallas, todos los procesos tienen el
-     mismo contenido en sus variable =vista=.
-   #+end_proof
+    - Terminación :: Al operar en un sistema síncrono, el algoritmo termina en
+      dos rondas, eligiendo una propuesta \((min(vista))\).
+    - Validez :: El conjunto vista tiene valores propuestos por los vecinos, por
+      lo que =min(vista)= es una propuesta de algún vecino.
+    - Acuerdo :: Como \(G = k_n\) y sin fallas, todos los procesos tienen el
+      mismo contenido en sus variable =vista=.
+    #+end_proof
 
-   Este algoritmo resuelve el problema del consenso. Otra opción es extender el
-   algoritmo de elección de líder visto algunas secciones atrás. Recordemos el
-   algoritmo:
+    Este algoritmo resuelve el problema del consenso. Otra opción es extender el
+    algoritmo de elección de líder visto algunas secciones atrás. Recordemos el
+    algoritmo:
 
-   #+attr_latex: :options [caption=Algoritmo de elección de líder]
-   #+begin_lstlisting
-   Algoritmo eligeLider(ID, total):
-   Lider = ID, ronda = 0
+    #+attr_latex: :options [caption=Algoritmo de elección de líder. ID \(\in \mathbb{N}\). \(total \coloneqq |V|\). \(d\) grado del vértice]
+    #+begin_lstlisting
+    Algoritmo eligeLider(ID, total):
+      Lider = ID, ronda = 0
 
-   Ejecutar en todo momento src_latex{$t \ge\ 0$}:
-   send(<Lider>) a todos los vecinos
+    Ejecutar en todo momento src_latex{$t \ge\ 0$}:
+      send(<Lider>) a todos los vecinos
 
-   Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
-   Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
-   Lider = max(mensajes)
-   ronda = ronda + 1
-   if ronda == total then
-   terminar algoritmo
-   #+end_lstlisting
-   #+begin_abmn
-   ID \(\in \mathbb{N}\), total = \(|V|\), \(d\) grado del vértice
-   #+end_abmn
+    Al recibir mensaje de todos los vecinos en tiempo src_latex{$t \ge 1$}:
+      Mensajes = src_latex{$\{<l_1>,\ \ldots,\ <l_d>\} \cup Lider$}
+      Lider = max(mensajes)
+      ronda = ronda + 1
+      if ronda == total then
+        terminar algoritmo
+    #+end_lstlisting
 
-   Propongamos el siguiente algoritmo, el modelo sigue siendo un sistema
-   síncrono sin fallas y sobre la gráfica completa (\(k_n\)):
+    Propongamos el siguiente algoritmo, el modelo sigue siendo un sistema
+    síncrono sin fallas y sobre la gráfica completa (\(k_n\)):
 
-   #+attr_latex: :options [caption=Algoritmo de consenso 2 en el modelo A]
-   #+begin_lstlisting
-   Algoritmo consenso2(src_latex{$v_i,\ total$}):
+    #+attr_latex: :options [caption=Algoritmo de consenso 2 en el modelo A]
+    #+begin_lstlisting
+    Algoritmo consenso2(src_latex{$v_i,\ total$}):
 
-     soyLider = eligeLider(ID, total)
+      soyLider = eligeLider(ID, total)
 
-     if soyLider then
-       send(src_latex{$<v_i>$})
-       decidir mi propuesta
-     else:
-       esperar propuesta del lider
-       elegir propuesta del lider
-   #+end_lstlisting
+      if soyLider then
+        send(src_latex{$<v_i>$})
+        decidir mi propuesta
+      else:
+        esperar propuesta del lider
+        elegir propuesta del lider
+    #+end_lstlisting
 
-   #+begin_affirmation
-   El algoritmo =consenso2= soluciona el problema del consenso.
-   #+end_affirmation
+    #+begin_affirmation
+    El algoritmo =consenso2= soluciona el problema del consenso.
+    #+end_affirmation
 
-   #+begin_proof
-   De manera similar al caso del algoritmo =consenso1=, probaremos que este
-   algoritmo satisface terminación, validez y acuerdo:
+    #+begin_proof
+    De manera similar al caso del algoritmo =consenso1=, probaremos que este
+    algoritmo satisface terminación, validez y acuerdo:
 
-   - Terminación :: Sabemos que el algoritmo de elección de líder termina
-     después de \(n\) rondas, con \(n\) el número de procesos en el sistema. Por
-     lo que, en las subsecuentes dos rondas, termina el algoritmo y todo proceso
-     elige un valor.
-   - Validez :: Tenemos dos opciones, el líder decide su propuesta o cualquier
-     otro proceso sigue la propuesta del líder.
-   - Acuerdo :: El líder decide su propuesta y todos los demás lo siguen.
-   #+end_proof
+    - Terminación :: Sabemos que el algoritmo de elección de líder termina
+      después de \(n\) rondas, con \(n\) el número de procesos en el sistema. Por
+      lo que, en las subsecuentes dos rondas, termina el algoritmo y todo proceso
+      elige un valor.
+    - Validez :: Tenemos dos opciones, el líder decide su propuesta o cualquier
+      otro proceso sigue la propuesta del líder.
+    - Acuerdo :: El líder decide su propuesta y todos los demás lo siguen.
+    #+end_proof
 
-** Sistemas síncronos con fallos de tipo paro
+*** Sistemas síncronos con fallos de tipo paro
 
-   Un parámetro importante de nuestro problema es \(f\), que representa el
-   máximo número de procesos que pueden fallar durante la ejecución de nuestro
-   sistema. A este tipo de sistemas los llamamos f-resilient.
+    Un parámetro importante de nuestro problema es \(f\), que representa el
+    máximo número de procesos que pueden fallar durante la ejecución de nuestro
+    sistema. A este tipo de sistemas los llamamos f-resilient.
 
-   Una ejecución de un sistema con fallas de tipo paro consiste de:
+    Una ejecución de un sistema con fallas de tipo paro consiste de:
 
-   - Subconjunto \(F\) con a lo más \(f\) procesos (fallidos).
-   - El subconjunto \(F\) no es conocido /a priori/. Puede ser diferente en cada
-     ejecución.
-   - Cada ronda contiene:
-     + Exactamente un evento de cómputo \(\forall \text{ proceso } p \not\in
-       F\).
-     + A lo más un evento de cómputo \(forall \text{ proceso } p \in F\). Además
-       si un proceso en F no tiene un evento de cómputo en alguna ronda,
-       entonces, no tiene eventos de cómputo en rodas subsecuentes. Esto
-       significa que si un proceso falla, ya no se repone. Y un conjunto
-       arbitrario de sus mensajes son entregados.
+    - Subconjunto \(F\) con a lo más \(f\) procesos (fallidos).
+    - El subconjunto \(F\) no es conocido /a priori/. Puede ser diferente en cada
+      ejecución.
+    - Cada ronda contiene:
+      + Exactamente un evento de cómputo \(\forall \text{ proceso } p \not\in
+        F\).
+      + A lo más un evento de cómputo \(forall \text{ proceso } p \in F\). Además
+        si un proceso en F no tiene un evento de cómputo en alguna ronda,
+        entonces, no tiene eventos de cómputo en rodas subsecuentes. Esto
+        significa que si un proceso falla, ya no se repone. Y un conjunto
+        arbitrario de sus mensajes son entregados.
 
-  Esta última propiedad es muy importante y causa las dificultades asociadas con
-  este modelo de fallas. Si todo fallo de tipo paro es un fallo limpio, en el
-  cual todos o ninguno de los mensajes de salida de los procesos fallidos son
-  entregados en su último paso, el consenso puede ser resuelto
-  eficientemente. Pero la incertidumbre en el efecto de los fallos de tipo paro
-  significa que los procesos deben realizar más trabajo (intercambiar más
-  mensajes) para poder resolver el consenso.
+   Esta última propiedad es muy importante y causa las dificultades asociadas con
+   este modelo de fallas. Si todo fallo de tipo paro es un fallo limpio, en el
+   cual todos o ninguno de los mensajes de salida de los procesos fallidos son
+   entregados en su último paso, el consenso puede ser resuelto
+   eficientemente. Pero la incertidumbre en el efecto de los fallos de tipo paro
+   significa que los procesos deben realizar más trabajo (intercambiar más
+   mensajes) para poder resolver el consenso.
 
 *** Sistemas con fallos de un proceso
 
@@ -1586,12 +1650,15 @@
         vista = src_latex{$\{v_1,\ v_2,\ \ldots,\ v_d\} \cup v_i$}
         decision = min(vista)
     #+end_lstlisting
-    #+begin_abmn
-    Podemos utilizar cualquier función \(f(v_1,\ \ldots,\ v_n)\) determinista.
-    #+end_abmn
+    #+begin_note
+    Podemos utilizar cualquier función \(f(v_1,\ \ldots,\ v_n)\) determinista
+    para calcular la decisión en el algoritmo =consenso 1=.
+    #+end_note
 
     #+begin_affirmation
     El algoritmo =consenso2= resuelve el problema del consenso en el *modelo B*.
+    #+end_affirmation
+
     #+begin_proof
     Mostraremos que no puede resolver el problema del consenso en el modelo
     B. En particular mostraremos que el algoritmo puede no cumplir
@@ -1600,7 +1667,6 @@
     elección de líder. En este punto, los demás procesos no pueden llegar a
     ejecutar la sección de elección de valor y el sistema no termina.
     #+end_proof
-    #+end_affirmation
 
     #+attr_latex: :options [caption=Algoritmo de consenso 2 en el modelo B]
     #+begin_lstlisting
@@ -1649,6 +1715,8 @@
 
     #+begin_affirmation
     El algoritmo consenso3 soluciona el problema del consenso.
+    #+end_affirmation
+
     #+begin_proof
     Hay que probar que se cumplen las tres propiedades del consenso.
 
@@ -1660,22 +1728,20 @@
       distinta para todos los procesos, en la ronda dos, ellos deciden el mismo
       valor a causa de la propagación hecha anteriormente.
     #+end_proof
-    #+end_affirmation
+
 
 *** Sistemas con fallos de f procesos
 
     Vamos a generalizar los modelos anteriores de la siguiente forma (*modelo C*):
 
     - Gráfica de comunicación G: _\(K_n\)_.
-    - Comunicación _síncrona_.
-    - _A lo más \(f\) procesos fallan_: Al detenerse pueden dejar de enviar un
+    - Comunicación /síncrona/.
+    - /A lo más \(f\) procesos fallan/: Al detenerse pueden dejar de enviar un
       conjunto arbitrario de mensajes.
-    - \(f < n\), con _\(n\) el número de procesos_ en el sistema.
+    - \(f < n\), con /\(n\) el número de procesos/ en el sistema.
 
-    Podemos definir un mecanismo de consenso para nuestro problema:
-
-
-    *Mecanismo de consenso*
+    Podemos definir un mecanismo de consenso para nuestro problema (*Mecanismo de
+    consenso*):
 
     1. Cada proceso inicia con una propuesta
     2. Envía su propuesta a todos sus vecinos.
@@ -1683,13 +1749,14 @@
        función determinista.
     4. Repetir los pasos 1 a 3.
 
+    Este mecanismo de consenso debe satisfacer las siguientes propiedades:
 
-    - *Propiedad 1* :: Si _no hay fallas_, se llega a un _acuerdo_.
-    - *Propiedad 2* ::  Si _ya existía un acuerdo_, el acuerdo _se mantiene_.
+    - *Propiedad 1* :: Si /no hay fallas/, se llega a un /acuerdo/.
+    - *Propiedad 2* ::  Si /ya existía un acuerdo/, el acuerdo /se mantiene/.
 
     Para satisfacer nuestro mecanismo de consenso, proponemos el siguiente
     algoritmo que satisface nuestro mecanismo de consenso. Podemos observar que
-    se cumplen las propiedades de _terminación (ok)_, _validez (ok)_ y _acuerdo (?)_.
+    se cumplen las propiedades de /terminación/, /validez (ok)/ y /acuerdo/.
 
     #+attr_latex: :options [caption = Algoritmo de consenso para el modelo síncrono con \(f\) fallos de tipo paro]
     #+begin_lstlisting
@@ -1706,24 +1773,22 @@
 
     #+begin_affirmation
     El algoritmo =consenso= resuelve el problema del consenso en el modelo C.
+    #+end_affirmation
+
     #+begin_proof
     Terminación: Termina el algoritmo en f + 1 rondas
 
     Validez: ~prop~ en cada ronda es un valor que propuso algún proceso.
 
     Acuerdo:
-      + El algoritmo ejecuta _f + 1 rondas_, entonces, _hay a los más f fallas_.
-      + En _al menos una_ de las rondas _no hay fallas_.
-      + Supongamos que lo anterior sucede en la ronda r. _Al final_ de esa ronda,
-        todos los procesos que están vivos _tienen la misma propuesta_.
-      + Desde ese momento y hasta la ronda _f + 1_, _el acuerdo se mantiene_, sin
-        importar el _número de fallas que puedan ocurrir después_.
-      + Por lo tanto, _todos los procesos acuerdan el mismo valor_.
-
+      + El algoritmo ejecuta /f + 1 rondas/, entonces, /hay a los más f fallas/.
+      + En /al menos una/ de las rondas /no hay fallas/.
+      + Supongamos que lo anterior sucede en la ronda r. /Al final/ de esa ronda,
+        todos los procesos que están vivos /tienen la misma propuesta/.
+      + Desde ese momento y hasta la ronda /f + 1/, /el acuerdo se mantiene/, sin
+        importar el /número de fallas que puedan ocurrir después/.
+      + Por lo tanto, /todos los procesos acuerdan el mismo valor/.
     #+end_proof
-    #+end_affirmation
-
-    ¿Visualmente como se ve este argumento de acuerdo? Consideremos
 
 
 *** Algoritmo de consenso detección temprana
@@ -1733,13 +1798,13 @@
     r que se exhibe en la prueba anterior?
 
     Vamos a analizar que sucede con ese algoritmo. Lo primero que sabemos, es
-    que en cada ejecución _ocurren a lo más f fallos_, aunque el número real de
-    fallas \(t\), con \(t \ge f\), _puede ser mucho menor_. El objetivo es diseñar
-    algoritmos que _detecten lo antes posible_ cuando pueden _tomar una
-    decisión_. El mecanismo básico de acuerdo garantiza que en _un ronda sin
-    fallas, se llega a un acuerdo_. Lo que buscamos ahora es que algún proceso
-    _detecte_ que, desde su perspectiva, _no ocurrieron fallas_ en alguna ronda. Es
-    decir, tener un _mecanismo básico de consenso con detección temprana_.
+    que en cada ejecución /ocurren a lo más f fallos/, aunque el número real de
+    fallas \(t\), con \(t \ge f\), /puede ser mucho menor/. El objetivo es diseñar
+    algoritmos que /detecten lo antes posible/ cuando pueden /tomar una
+    decisión/. El mecanismo básico de acuerdo garantiza que en /una ronda sin
+    fallas, se llega a un acuerdo/. Lo que buscamos ahora es que algún proceso
+    /detecte/ que, desde su perspectiva, /no ocurrieron fallas/ en alguna ronda. Es
+    decir, tener un /mecanismo básico de consenso con detección temprana/.
 
 
     *Mecanismo básico de consenso con detección temprana*. Se reciben el mismo
@@ -1772,29 +1837,32 @@
     #+begin_affirmation
     El algoritmo =consensoTemprano= soluciona el problema del consenso, tolerando
     a lo más f fallos.
-    #+begin_proof
-
-    *Terminación:* Termina en a lo más f + 1 rondas.
-    *Validez:* =prop= siempre es propuesto por alguien.
-    *Acuerdo:* Sea \(r\) la primera ronda en que para algún \(p_i\) se cumple
-    \(vec\_ant_r =​= vec\_act_r\). Sea \(p_j \neq\ p_i |\ p_j\) detecta
-    \(vec\_ant_r =​= vec\_act_r\). Tenemos que mostrar que \(prop_i == prop_j\).
-    Por contradicción, supongamos que \(prop_i \neq prop_j\) al final de la
-    ronda \(r\), siempre recordando, que tanto \(p_i \text{ y } p_j\) detectaron
-    que se cumple \(vec\_ant_r =​= vec\_act_r\) y la gráfica es completa.
-    Entonces, para que ambos sean distintos \(\exists\ p_k\ |\ p_k\
-    send_r(prop_k)\ \rightarrow\ p_i\ \wedge\ p_k\ ¬send_r(prop_k) \rightarrow
-    p_j\) en esa misma ronda porqué falla.  Por la propiedad de que \(p_i\) y
-    \(p_j\) detectaron en la ronda \(r\) que \(vec\_ant_r =​= vec\_act_r\),
-    \(p_k\) le debió enviar un mensaje a \(p_i\) y \(p_j\) en la ronda \(r -
-    1\). Pero esto implica que \(p_j\) no recibió el mismo número de mensajes en
-    dos rondas consecutivas, lo cuál es una contradicción respecto a nuestra
-    suposición de que ambos procesos reciben el mismo número de mensajes en dos
-    rondas consecutivas.
-
-    \therefore \(prop_i =​= prop_j\)
-    #+end_proof
     #+end_affirmation
+
+    #+begin_proof
+    Probaremos que se cumplen las tres propiedades de un algoritmo de consenso:
+
+    - *Terminación* :: Termina en a lo más f + 1 rondas.
+    - *Validez* :: =prop= siempre es propuesto por alguien.
+    - *Acuerdo*  :: Sea \(r\) la primera ronda en que para algún \(p_i\) se cumple
+      \(vec\_ant_r =​= vec\_act_r\). Sea \(p_j \neq\ p_i |\ p_j\) detecta
+      \(vec\_ant_r =​= vec\_act_r\). Tenemos que mostrar que \(prop_i ==
+      prop_j\).  Por contradicción, supongamos que \(prop_i \neq prop_j\) al
+      final de la ronda \(r\), siempre recordando, que tanto \(p_i \text{ y }
+      p_j\) detectaron que se cumple \(vec\_ant_r =​= vec\_act_r\) y la gráfica
+      es completa.  Entonces, para que ambos sean distintos \(\exists\ p_k\ |\
+      p_k\ send_r(prop_k)\ \rightarrow\ p_i\ \wedge\ p_k\ ¬send_r(prop_k)
+      \rightarrow p_j\) en esa misma ronda porqué falla.  Por la propiedad de
+      que \(p_i\) y \(p_j\) detectaron en la ronda \(r\) que \(vec\_ant_r =​=
+      vec\_act_r\), \(p_k\) le debió enviar un mensaje a \(p_i\) y \(p_j\) en la
+      ronda \(r - 1\). Pero esto implica que \(p_j\) no recibió el mismo número
+      de mensajes en dos rondas consecutivas, lo cuál es una contradicción
+      respecto a nuestra suposición de que ambos procesos reciben el mismo
+      número de mensajes en dos rondas consecutivas.
+
+      \therefore \(prop_i =​= prop_j\)
+    #+end_proof
+
 
     #+begin_affirmation
     En toda ejecución del algoritmo =consensoTemprano= cada proceso correcto
@@ -1830,223 +1898,237 @@
 
 
 
-** Sistemas síncronos con fallas bizantinas
+*** Sistemas síncronos con fallas bizantinas
 
-   Un proceso bizantino puede comportarse de forma maliciosa, por ejemplo,
+    Un proceso bizantino puede comportarse de forma maliciosa, por ejemplo,
 
-   - puede dejar de enviar mensajes que debería de enviar
-   - enviar mensajes que no debería de enviar
-   - mentir, es decir, enviar información contradictoria a procesos distintos
-   - mentir acerca de lo que ha visto de otros procesos.
+    - puede dejar de enviar mensajes que debería de enviar
+    - enviar mensajes que no debería de enviar
+    - mentir, es decir, enviar información contradictoria a procesos distintos
+    - mentir acerca de lo que ha visto de otros procesos.
 
-   El objetivo de los procesos bizantinos es confundir a los procesos
-   correctos. Actualizamos nuestras suposiciones del modelo, lo definimos a
-   continuación:
+    El objetivo de los procesos bizantinos es confundir a los procesos
+    correctos. Actualizamos nuestras suposiciones del modelo, lo definimos a
+    continuación:
 
-   1. Cada proceso tiene un ID único en [1, \(\ldots\), n], donde n es el número
-      de procesos.
-   2. Cada proceso conoce de antemano el ID del proceso al que conecta cada uno
-      de sus puertos.
-   3. En toda ejecución, hay a lo más \(t < n\) procesos bizantinos.
+    1. Cada proceso tiene un ID único en [1, \(\ldots\), n], donde n es el
+       número de procesos.
+    2. Cada proceso conoce de antemano el ID del proceso al que conecta cada uno
+       de sus puertos.
+    3. En toda ejecución, hay a lo más \(t < n\) procesos bizantinos.
 
-   La inspiración de este problema se remonta al problema de los generales
-   bizantinos. Este problema es descrito a continuación:
+    La inspiración de este problema se remonta al problema de los generales
+    bizantinos. Este problema es descrito a continuación:
 
-   Hay un grupo de generales de la armada bizantina acampados con sus tropas
-   alrededor de una ciudad enemiga. Después de observar al enemigo, cada general
-   forma su propia opinión acerca del plan de acción: O atacar o retirarse. La
-   comunicación sólo es a través de mensajes usando mensajeros. Los generales
-   deben acordar un plan de ataque común, es decir, o todos atacan o todos se
-   retiran. Sin embargo, uno o más de ellos podrían ser traidores que quieren
-   confundir a los otros generales. El problema de los generales es encontrar un
-   algoritmo que satisfaga los siguientes dos requerimientos:
+    Hay un grupo de generales de la armada bizantina acampados con sus tropas
+    alrededor de una ciudad enemiga. Después de observar al enemigo, cada
+    general forma su propia opinión acerca del plan de acción: O atacar o
+    retirarse. La comunicación sólo es a través de mensajes usando
+    mensajeros. Los generales deben acordar un plan de ataque común, es decir, o
+    todos atacan o todos se retiran. Sin embargo, uno o más de ellos podrían ser
+    traidores que quieren confundir a los otros generales. El problema de los
+    generales es encontrar un algoritmo que satisfaga los siguientes dos
+    requerimientos:
 
-   - *Acuerdo:* Todos los generales leales deben decir el mismo plan de acción. O
-     atacan o se retiran.
-   - *Validez:* Si todos los generales leales tienen la misma opinión inicial,
-     entonces deben de acordar esa opinión.
+    - *Acuerdo:* Todos los generales leales deben decir el mismo plan de acción. O
+      atacan o se retiran.
+    - *Validez:* Si todos los generales leales tienen la misma opinión inicial,
+      entonces deben de acordar esa opinión.
 
-   Los generales leales van a hacer todo lo que el algoritmo diga que deben de
-   hacer, pero los traidores, pueden hacer cualquier cosa que deseen. El
-   algoritmo debe garantizar la condición de acuerdo a pesar de lo que los
-   traidores puedan hacer. Es más, los traidores no pueden hacer que los
-   generales leales adopten un mal plan, es decir, un plan que ninguno de los
-   generales leales soporte.
+    Los generales leales van a hacer todo lo que el algoritmo diga que deben de
+    hacer, pero los traidores, pueden hacer cualquier cosa que deseen. El
+    algoritmo debe garantizar la condición de acuerdo a pesar de lo que los
+    traidores puedan hacer. Es más, los traidores no pueden hacer que los
+    generales leales adopten un mal plan, es decir, un plan que ninguno de los
+    generales leales soporte.
 
-   El contenido de los mensajes está bajo el control del emisor, así que los
-   traidores pueden enviar cualquier mensaje posible. Se asume que la
-   comunicación es confiable. Por lo que haremos tres suposiciones.
+    El contenido de los mensajes está bajo el control del emisor, así que los
+    traidores pueden enviar cualquier mensaje posible. Se asume que la
+    comunicación es confiable. Por lo que haremos tres suposiciones.
 
-   1. Todo mensaje enviado es entregado correctamente.
-   2. El receptor del mensaje sabe quien lo envío.
-   3. La ausencia de un mensaje puede ser detectada.
+    1. Todo mensaje enviado es entregado correctamente.
+    2. El receptor del mensaje sabe quien lo envío.
+    3. La ausencia de un mensaje puede ser detectada.
 
-   Las primeras dos suposiciones previenen que un traidor interfiera con la
-   comunicación entre otros dos generales, debido a que no puede interferir en
-   los mensajes que ellos envían, y el no puede confundir su intercambio
-   introduciendo mensajes espurios. La tercera suposición va a frustrar que un
-   traidor que intente evitar llegar a consenso por simplemente no enviar
-   mensajes. Es más, se asume que cada general puede enviar mensajes
-   directamente a cualquier otro general.
+    Las primeras dos suposiciones previenen que un traidor interfiera con la
+    comunicación entre otros dos generales, debido a que no puede interferir en
+    los mensajes que ellos envían, y el no puede confundir su intercambio
+    introduciendo mensajes espurios. La tercera suposición va a frustrar que un
+    traidor que intente evitar llegar a consenso por simplemente no enviar
+    mensajes. Es más, se asume que cada general puede enviar mensajes
+    directamente a cualquier otro general.
 
-   Debido a la tercera suposición, cuando un traidor no envía un mensaje, el
-   general que se supone que debe recibirlo detectará ese hecho y puede
-   comportarse como si se recibiera algún mensaje predeterminado del
-   traidor. Así, a partir de ahora, podemos suponer que un traidor nunca
-   intentará no enviar un mensaje.
+    Debido a la tercera suposición, cuando un traidor no envía un mensaje, el
+    general que se supone que debe recibirlo detectará ese hecho y puede
+    comportarse como si se recibiera algún mensaje predeterminado del
+    traidor. Así, a partir de ahora, podemos suponer que un traidor nunca
+    intentará no enviar un mensaje.
 
-   Consideremos el algoritmo de consenso básico. ¿Resuelve el problema del
-   consenso cuando hay 1 traidor?
+    Consideremos el algoritmo de consenso básico. ¿Resuelve el problema del
+    consenso cuando hay 1 traidor?
 
-   #+attr_latex: :options [caption = Algoritmo de consenso para el modelo síncrono con \(f\) fallos de tipo paro]
-   #+begin_lstlisting
-   Algoritmo consenso(prop):
+    #+attr_latex: :options [caption = Algoritmo de consenso para el modelo síncrono con \(f\) fallos de tipo paro]
+    #+begin_lstlisting
+    Algoritmo consenso(prop):
 
-   For r = 0 to f do: // Ejecutamos f + 1 rondas
-     send(src_latex{$<prop>$}) a todos los vecinos
-     src_latex{$view = \{m_i | m_i\ \text{mensaje recibido del vecino}\ i\} \cup prop$}
-     src_latex{$prop = \min(view)$}
-   End For
-
-   decision = prop
-   #+end_lstlisting
-   #+begin_abmn
-   A primera vista, el problema de los generales bizantinos parece engañosamente
-   simple de resolver y completamente inútil. De hecho, es difícil de resolver y
-   extremadamente útil. Para mostrar que el problema es difícil, considere un
-   algoritmo ingenuo en el que todos los generales se envían sus opiniones entre
-   sí, y luego cada general decide la opinión que recibió de la mayoría de los
-   otros generales (para simplificar, suponga que el número de generales es
-   impar). Este algoritmo es incorrecto porque los traidores pueden enviar
-   diferentes mensajes a diferentes generales. En particular, cuando la votación
-   está cerrada, los traidores pueden hacer que un general leal se comprometa a
-   atacar y que otro general leal se comprometa a retirarse.
-   #+end_abmn
-
-   Cuando hablamos del consenso bizantino, vamos a observar que nuestra
-   definición de validez difiere un poco de la definición original que habíamos
-   dado anteriormente.
-
-   \begin{multicols}{2}
-     \textbf{Consenso}
-     \begin{enumerate}
-       \item \textbf{Terminación:} todo proceso correcto decide un valor.
-       \item \textbf{Validez:} Todo valor decidido fue propuesto.
-       \item \textbf{Acuerdo:} Todo par de decisiones son iguales
-     \end{enumerate}
-
-     \columnbreak
-
-     \textbf{Consenso Bizantino}
-     \begin{enumerate}
-       \item \textbf{Terminación:} Todo proceso correcto decide un valor.
-       \item \textbf{Validez:} Si todos los procesos correctos tienen una propuesta inicial v, entonces la decisión de ellos es v.
-       \item \textbf{Acuerdo:} Todo par de decisiones de los procesos correcto son iguales.
-     \end{enumerate}
-   \end{multicols}
-
-   En el caso de la validez para el consenso bizantino, si no se cumple la
-   condición, la decisión podría no ser propuesto por alguien.
-
-   #+begin_affirmation
-   No existe algoritmo que solucione el consenso bizantino en el modelo síncrono
-   con \(t\) fallas bizantinas, si \(t \ge \frac{n}{3}\), con \(n\) procesos en
-   el sistema. Sin embargo, si se puede solucionar sí \(t < \frac{n}{3}\).
-   #+end_affirmation
-
-   Presentaremos un algoritmo que solucione el problema del consenso para \(t <
-   \frac{n}{4}\). La idea de este algoritmo es ejecutarlo por fases de dos
-   rondas de comunicación.
-
-   #+begin_lstlisting
-   Algoritmo consensoBizantino(prop, ID):
-     prop_inicial = prop
-
-     For fase = 0 to t do: // Ejecutamos t + 1 fases.
-       //1er ronda
-       send(<prop>) a todos
-       rec = multiconjunto con todos los recibidos y el mio
-       frec = valor que más se repite en rec
-       num = número de veces se repite frec
-
-       //2da ronda
-       if ID == fase then # Soy el coordinador de la fase
-         send(<frec>) a todos
-       if recibí v del coordinador en la fase then
-         coord = v
-       else
-         coord = prop_inicial
-       if src_latex{$num > \frac{n}{2} + t$} then
-         prop = frec
-       else
-         prop = coord
-       end if
-    end For
+    For r = 0 to f do: // Ejecutamos f + 1 rondas
+      send(src_latex{$<prop>$}) a todos los vecinos
+      src_latex{$view = \{m_i | m_i\ \text{mensaje recibido del vecino}\ i\} \cup prop$}
+      src_latex{$prop = \min(view)$}
+    End For
 
     decision = prop
-   #+end_lstlisting
+    #+end_lstlisting
+    #+begin_note
+    A primera vista, el problema de los generales bizantinos parece
+    engañosamente simple de resolver y completamente inútil. De hecho, es
+    difícil de resolver y extremadamente útil. Para mostrar que el problema es
+    difícil, considere un algoritmo ingenuo en el que todos los generales se
+    envían sus opiniones entre sí, y luego cada general decide la opinión que
+    recibió de la mayoría de los otros generales (para simplificar, suponga que
+    el número de generales es impar). Este algoritmo es incorrecto porque los
+    traidores pueden enviar diferentes mensajes a diferentes generales. En
+    particular, cuando la votación está cerrada, los traidores pueden hacer que
+    un general leal se comprometa a atacar y que otro general leal se comprometa
+    a retirarse.
+    #+end_note
+
+    Cuando hablamos del consenso bizantino, vamos a observar que nuestra
+    definición de validez difiere un poco de la definición original que habíamos
+    dado anteriormente.
+
+    \begin{multicols}{2}
+      \textbf{Consenso}
+      \begin{enumerate}
+        \item \textbf{Terminación:} todo proceso correcto decide un valor.
+        \item \textbf{Validez:} Todo valor decidido fue propuesto.
+        \item \textbf{Acuerdo:} Todo par de decisiones son iguales
+      \end{enumerate}
+
+      \columnbreak
+
+      \textbf{Consenso Bizantino}
+      \begin{enumerate}
+        \item \textbf{Terminación:} Todo proceso correcto decide un valor.
+        \item \textbf{Validez:} Si todos los procesos correctos tienen una propuesta inicial v, entonces la decisión de ellos es v.
+        \item \textbf{Acuerdo:} Todo par de decisiones de los procesos correcto son iguales.
+      \end{enumerate}
+    \end{multicols}
+
+    En el caso de la validez para el consenso bizantino, si no se cumple la
+    condición, la decisión podría no ser propuesto por alguien.
+
+    #+begin_affirmation
+    No existe algoritmo que solucione el consenso bizantino en el modelo síncrono
+    con \(t\) fallas bizantinas, si \(t \ge \frac{n}{3}\), con \(n\) procesos en
+    el sistema. Sin embargo, si se puede solucionar sí \(t < \frac{n}{3}\).
+    #+end_affirmation
+
+    Presentaremos un algoritmo que solucione el problema del consenso para \(t <
+    \frac{n}{4}\). La idea de este algoritmo es ejecutarlo por fases de dos
+    rondas de comunicación.
 
 
-   #+caption: Ejemplo de ejecución. Modelo basado en fases.
-   #+attr_latex: scale=0.9\textwidth
-   #+label: fig:DFS
-   [[file:figs/dibujo38.png]]
+    #+attr_latex: :options [caption = Algoritmo de consenso bizantino para \(t < \frac{n}{4}\)]
+    #+begin_lstlisting
+    Algoritmo consensoBizantino(prop, ID):
+      propInicial = prop
+
+      For fase = 0 to t do: // Ejecutamos t + 1 fases.
+        //1er ronda
+        send(<prop>) a todos
+        rec = multiconjunto con todos los recibidos y el mio
+        frec = valor que más se repite en rec
+        num = número de veces se repite frec
+
+        //2da ronda
+        if ID == fase then: / / Soy el coordinador de la fase
+          send(<frec>) a todos
+        if recibí v del coordinador en la fase then
+          coord = v
+        else
+          coord = propInicial
+        if src_latex{$num > \frac{n}{2} + t$} then
+          prop = frec
+        else
+          prop = coord
+        end if
+     end For
+
+     decision = prop
+    #+end_lstlisting
 
 
-   #+caption: Ejemplo de ejecución. Diagrama para una ejecución con un proceso fallido.
-   #+attr_latex: scale=0.9\textwidth
-   #+label: fig:DFS
-   [[file:figs/dibujo39.png]]
+    #+caption: Ejemplo de ejecución. Modelo basado en fases.
+    #+attr_latex: :width 0.7\linewidth
+    #+label: fig:DFS
+    [[file:figs/dibujo38.png]]
 
-   Recordando...
 
-   1. *Terminación*: Todos los procesos correctos deciden un valor
-   2. *Validez*: Si todos los procesos correctos tienen propuesta inicial v,
-      entonces los correctos sólo pueden decidir v.
-   3. *Acuerdo*: Las decisiones de los procesos correctos son iguales.
+    #+caption: Ejemplo de ejecución. Diagrama para una ejecución con un proceso fallido.
+    #+attr_latex: :width 0.7\linewidth
+    #+label: fig:DFS
+    [[file:figs/dibujo39.png]]
 
-   (*) En la ronda 1, cada proceso correcto recibe por lo menos \(n - t\)
-   mensajes. Porque en cada ejecución hay por lo menos \(n - t\) procesos
-   correctos.
+    Recordando...
 
-   #+begin_affirmation
-   Si al inicio de la i-ésima fase del algoritmo, los procesos correctos han
-   llegado a un acuerdo, es decir, todos tienen el mismo valor en la variable
-   =prop=, entonces, el consenso se mantiene hasta el final de la fase.
+    1. *Terminación*: Todos los procesos correctos deciden un valor
+    2. *Validez*: Si todos los procesos correctos tienen propuesta inicial v,
+       entonces los correctos sólo pueden decidir v.
+    3. *Acuerdo*: Las decisiones de los procesos correctos son iguales.
 
-   #+begin_proof
-   Cada proceso correcto recibe por lo menos \(n - t\) veces el valor v sobre el
-   que hay consenso, y por lo tanto, \(v\) aparece por lo menos \(n - t\) veces
-   en el multiconjunto rec de cada proceso correcto.
+    #+begin_nota
+    label:note:nminust
+    En la ronda 1, cada proceso correcto recibe por lo
+    menos \(n - t\) mensajes. Porque en cada ejecución hay por lo menos \(n -
+    t\) procesos correctos.
+    #+end_nota
 
-   Obs: \(t < \frac{n}{4} \iff n - t > \frac{n}{2} + t\) (1).
+    #+begin_affirmation
+    Si al inicio de la i-ésima fase del algoritmo, los procesos correctos han
+    llegado a un acuerdo, es decir, todos tienen el mismo valor en la variable
+    =prop=, entonces, el consenso se mantiene hasta el final de la fase.
+    #+end_affirmation
 
-   Por (1), no puede existir otro valor en \(rec\) que se repita más que
-   \(v\). De (1) también se sigue que cada proceso correcto ve la condición (*)
-   como verdadera.
+    #+begin_proof
+    Cada proceso correcto recibe por lo menos \(n - t\) veces el valor v sobre el
+    que hay consenso, y por lo tanto, \(v\) aparece por lo menos \(n - t\) veces
+    en el multiconjunto rec de cada proceso correcto.
 
-   \therefore Se cumple la afirmación
-   #+end_proof
-   #+end_affirmation
+    Observación: \(t < \frac{n}{4} \iff n - t > \frac{n}{2} + t\) (1).
 
-   #+begin_affirmation
-   El algoritmo =ConsensoBizantino= soluciona el problema del consenso para \(t <
-   \frac{n}{4}\).
+    Por (1), no puede existir otro valor en \(rec\) que se repita más que
+    \(v\). De (1) también se sigue que cada proceso correcto ve la condición de
+    la nota ref:note:nminust como verdadera.
 
-   #+begin_proof
-   /Terminación:/ Claramente todo proceso correcto termina al final de la fase
-   \(t + 1\). /Validez:/ Si todos los procesos correctos inician con el mismo
-   valor, es decir, hay consenso, la afirmación anterior implica que el consenso
-   se mantiene durante toda la ejecución.  /Acuerdo:/ Como el algoritmo ejecuta
-   \(t + 1\) fases, y hay a lo más t fallas, debe haber una fase en la que el
-   coordinador es correcto. Sea \(k\) la primera de esas fases, en una ejecución
-   dada, con coordinador \(p_k\). Si en esta fase, lo correcto no llegan a un
-   consenso en la primera ronda de la fase, el coordinador \(p_k\) les impone su
-   valor para que lleguen a un consenso. Una vez que llegan a un consenso al
-   final de la fase, el consenso no se rompe en fases subsecuentes por la
-   afirmación anterior.
-   #+end_proof
-   #+end_affirmation
+    \therefore Se cumple la afirmación
+    #+end_proof
+
+
+    #+begin_affirmation
+    El algoritmo =ConsensoBizantino= soluciona el problema del consenso para \(t <
+    \frac{n}{4}\).
+    #+end_affirmation
+
+    #+begin_proof
+    Probaremos las tres propiedades del consenso para este algoritmo:
+
+    - *Terminación* ::  Claramente todo proceso correcto termina al final de la
+      fase \(t + 1\).
+
+    - *Validez* :: Si todos los procesos correctos inician con el mismo valor, es
+      decir, hay consenso, la afirmación anterior implica que el consenso se
+      mantiene durante toda la ejecución.
+
+    - *Acuerdo* ::  Como el algoritmo ejecuta \(t + 1\) fases, y hay a lo más t
+      fallas, debe haber una fase en la que el coordinador es correcto. Sea
+      \(k\) la primera de esas fases, en una ejecución dada, con coordinador
+      \(p_k\). Si en esta fase, lo correcto no llegan a un consenso en la
+      primera ronda de la fase, el coordinador \(p_k\) les impone su valor para
+      que lleguen a un consenso. Una vez que llegan a un consenso al final de la
+      fase, el consenso no se rompe en fases subsecuentes por la afirmación
+      anterior.
+    #+end_proof
 
 ** Máquina de estados replicada y la universalidad del consenso
 
@@ -2057,182 +2139,1552 @@
    - Leslie Lamport
    #+end_quote
 
-   Aportaciones de Leslie Lamport
+*** Aportaciones de Leslie Lamport
 
-   - Máquina de estados replicada :: Posiblemente el más significante de las
-     contribuciones de Lamport es el paradigma de la máquina de estado
-     replicada, la cual fue introducida en el famoso artículo: ``Time, Clocks
-     and the Ordering of Events in a Distributed System'', y que además fue
-     desarrollado posteriormente. La abstracción captura cualquier servicio como
-     una máquina de estados centralizada (un tipo de máquina universal de
-     cómputo similar a una máquina de Turing). Tiene un estado interno y procesa
-     comandos de forma secuencial, cada uno resultando en un nuevo estado
-     interno y produciendo una respuesta. Lamport se dio cuenta que la
-     desalentadora tarea de replicar un servicio sobre múltiples computadoras
-     puede ser hecha de una forma remarcablemente simple si se presenta la misma
-     secuencia de comandos de entrada a todas las réplicas y ellas procesos a
-     través de una sucesión idéntica de estados.
-   - Causalidad y relojes lógicos :: Cualquier persona se puede dar cuenta que
-     la noción de tiempo no es natural para un sistema distribuido. Lamport fue
-     el primero en precisar una noción alternativa de ``relojes lógicos'', la
-     cuál impone un orden parcial sobre los eventos, basándose en la relación
-     causal inducida por enviar mensajes de una parte del sistema a otra.
-   - Consistencia secuencial :: Trabajando con una arquitectura multicore que
-     tenía una memoria caché distribuida, le permitió a Lamport crear
-     especificaciones formales para el comportamiento de coherencia de caché en
-     sistema multiprocesador. Este trabajo trajo algo de orden al caos de este
-     campo por desarrollador el concepto de consistencia secuencial, la cuál es
-     el estándar de facto para los sistemas de consistencia de memoria.
-   - exclusión mutua, el algoritmo del panadero (Algoritmos concurrentes)
-   - Snapshots distribuidos :: Una vez que se define lo que es el orden causal,
-     la noción de estados globales consistentes se sigue de forma natural. Eso
-     lleva a otro trabajo significante. Lamport y Mani Chandy inventaron el
-     primer algoritmo para leer el estado (tomar una ``snapshot'') de un sistema
-     distribuido arbitrario. Esta es una noción poderosa que otros han utilizado
-     en otras áreas, como redes, auto-estabilización, debugging y sistemas
-     distribuidos.
-   - \(\LaTeX\) :: Al crear una colección tan amplia de documentos impactantes,
-     es natural desear una herramienta de composición conveniente. Lamport no
-     sólo creo una herramienta para él, si no para toda la comunidad.
-   - Modelación formal de lenguajes y herramientas de verificación de programas ::
-   - Acuerdo bizantino ::
-   - Seguridad y viveza ::
-
-   Consideremos el siguiente problema: Tenemos un sistema bancario, el cual está
-   implementado sobre un sólo servidor. Este servidor, inicialmente puede
-   soportar una cantidad limitada de peticiones concurrentes. Sin embargo, el
-   número de usuarios de nuestro sistema comienza a crecer muy rápido. Hoy en
-   día es muy común escuchar a los arquitectos de software que las soluciones
-   que proponen son robustas, seguras y escalables. Sin embargo, la realidad es
-   que pocas aplicaciones están realmente preparadas para ser escalables, ya
-   que desde su diseño arquitectónico no fueron diseñadas soportar este
-   crecimiento o no está claro como debe de escalar para soportar el
-   crecimiento.
-
-   #+caption: Problema bancario.
-   #+attr_latex: scale=0.9\textwidth
-   #+label: problemaBancario
-   [[file:figs/dibujo40.png]]
-
-   En la práctica hay muchas formas de permitir que los sistemas crezcan, ya que
-   se pueden combinar técnicas de software y hardware. Existen dos tipos de
-   escalamiento, Horizontal y Vertical, ¿pero a que se refiere cada uno?
-
-   - Escalabilidad Vertical :: Se refiere a crecer el hardware, es decir, se
-     añade hardware cada vez más potente, ya sea disco duro, memoria,
-     procesador. Este crecimiento está limitado al hardware y tarde o temprano
-     tendrá un límite.
-
-     - Ventajas: No implica un problema para las aplicaciones, pues todo el
-       cambio es sobre hardware. Es mucho más fácil de implementar que el
-       escalamiento horizontal.
-     - Desventajas: El crecimiento está limitado por hardware. Una falla en el
-       servidor implica que la aplicación se detenga. No soporta alta
-       disponibilidad.
-
-   - Escalabilidad Horizontal :: Este modelo implica tener varios servidores
-     trabajando como un todo. Se crea una red de servidores conocida como
-     cluster, con la finalidad de repartirse el trabajo entre todos los nodos.
-
-     - Ventajas: El crecimiento es prácticamente infinito. Es posible combinarse
-       con el escalamiento vertical. Soporta alta disponibilidad. Si un nodo
-       falla, los demás siguen trabajando. Soporta el balanceo de carga.
-     - Desventajas: Requiere mucho mantenimiento. Es difícil de
-       configurar. Requiere de grandes cambios en el software. Requiere de
-       infraestructura más grande.
+    - Máquina de estados replicada :: Posiblemente el más significante de las
+      contribuciones de Lamport es el paradigma de la máquina de estado
+      replicada, la cual fue introducida en el famoso artículo: ``Time, Clocks
+      and the Ordering of Events in a Distributed System'', y que además fue
+      desarrollado posteriormente. La abstracción captura cualquier servicio
+      como una máquina de estados centralizada (un tipo de máquina universal de
+      cómputo similar a una máquina de Turing). Tiene un estado interno y
+      procesa comandos de forma secuencial, cada uno resultando en un nuevo
+      estado interno y produciendo una respuesta. Lamport se dio cuenta que la
+      desalentadora tarea de replicar un servicio sobre múltiples computadoras
+      puede ser hecha de una forma remarcablemente simple si se presenta la
+      misma secuencia de comandos de entrada a todas las réplicas y ellas
+      procesos a través de una sucesión idéntica de estados.
+    - Causalidad y relojes lógicos :: Cualquier persona se puede dar cuenta que
+      la noción de tiempo no es natural para un sistema distribuido. Lamport fue
+      el primero en precisar una noción alternativa de ``relojes lógicos'', la
+      cuál impone un orden parcial sobre los eventos, basándose en la relación
+      causal inducida por enviar mensajes de una parte del sistema a otra.
+    - Consistencia secuencial :: Trabajando con una arquitectura multicore que
+      tenía una memoria caché distribuida, le permitió a Lamport crear
+      especificaciones formales para el comportamiento de coherencia de caché en
+      sistema multiprocesador. Este trabajo trajo algo de orden al caos de este
+      campo por desarrollador el concepto de consistencia secuencial, la cuál es
+      el estándar de facto para los sistemas de consistencia de
+      memoria. Adicional a esto, también tenemos en el área de cómputo
+      concurrente los temas de exclusión mutua y el algoritmo del panadero.
+    - Snapshots distribuidos :: Una vez que se define lo que es el orden causal,
+      la noción de estados globales consistentes se sigue de forma natural. Eso
+      lleva a otro trabajo significante. Lamport y Mani Chandy inventaron el
+      primer algoritmo para leer el estado (tomar una ``snapshot'') de un
+      sistema distribuido arbitrario. Esta es una noción poderosa que otros han
+      utilizado en otras áreas, como redes, auto-estabilización, debugging y
+      sistemas distribuidos.
+    - \(\LaTeX\) :: Al crear una colección tan amplia de documentos impactantes,
+      es natural desear una herramienta de composición conveniente. Lamport no
+      sólo creo una herramienta para él, si no para toda la comunidad.
+    - Modelación formal de lenguajes y herramientas de verificación de programas ::
+    - Acuerdo bizantino ::
+    - Seguridad y viveza ::
 
 
+*** Máquina de estados replicada
 
-   #+caption: Escalamiento horizontal
-   #+attr_latex: scale=0.9\textwidth
-   #+label: escalamientoHorizontal
-   [[file:figs/dibujo41.png]]
+    Consideremos el siguiente problema: Tenemos un sistema bancario, el cual
+    está implementado sobre un sólo servidor. Este servidor, inicialmente puede
+    soportar una cantidad limitada de peticiones concurrentes. Sin embargo, el
+    número de usuarios de nuestro sistema comienza a crecer muy rápido. Hoy en
+    día es muy común escuchar a los arquitectos de software que las soluciones
+    que proponen son robustas, seguras y escalables. Sin embargo, la realidad es
+    que pocas aplicaciones están realmente preparadas para ser escalables, ya
+    que desde su diseño arquitectónico no fueron diseñadas soportar este
+    crecimiento o no está claro como debe de escalar para soportar el
+    crecimiento.
 
-   Desde nuestra perspectiva, estudiaremos este problema hablando de la máquina
-   de estados replicada y la universalidad del consenso.
-
-   Para resolver el problema, definimos una función =consenso(prop, inst)=, la
-   cuál soluciona el problema del consenso, es decir, proporciona terminación,
-   validez y acuerdo. Esta función trabajará como un módulo independiente de
-   cada servidor.
-   Vamos a definir como es que deben de interactuar los clientes y los
-   servidores a través de un par de algoritmos.
-
-   #+caption: Máquina de estados replicada
-   #+attr_latex: scale=0.9\textwidth
-   #+label: escalamientoHorizontal
-   [[file:figs/dibujo42.png]]
+    #+caption: Problema bancario.
+    #+attr_latex: :width 0.7\linewidth
+    #+label: problemaBancario
+    [[file:figs/dibujo40.png]]
 
 
-   #+begin_lstlisting
-   Algoritmo Cliente:
-     Al tener una transaccion T:
-       Genera una src_latex{$ID_T$}
-       send(<src_latex{$ID_T$}, T>) a todos los servidores
-       Espera por respuesta de algun servidor y reporta respuesta
-   #+end_lstlisting
+    En la práctica hay muchas formas de permitir que los sistemas crezcan, ya
+    que se pueden combinar técnicas de software y hardware. Existen dos tipos de
+    escalamiento, Horizontal y Vertical, ¿pero a que se refiere cada uno?
 
-   #+begin_lstlisting
-   Algoritmo servidor:
-     Q = lista de transacciones inicialmente vacia
-     r = 1
-     Ejecutar al recibir <src_latex{$ID_T$}, T> de algun cliente:
-       if not Q.contains(<src_latex{$ID_T$}, T>):
-         prop = <src_latex{$ID_T$}, T>
-         do
-           prop' = consenso(prop, r)
-           Q.addToEnd(prop')
-           Ejecutar localmente prop'
-           send(resp) a cliente
-           r = r + 1
-         while(prop src_latex{$\neq$} prop')
-   #+end_lstlisting
+    - Escalabilidad Vertical :: Se refiere a crecer el hardware, es decir, se
+      añade hardware cada vez más potente, ya sea disco duro, memoria,
+      procesador. Este crecimiento está limitado al hardware y tarde o temprano
+      tendrá un límite.
 
-   consenso(., x): para una \(x \in \mathbb{N}\) especifico
-   - consenso(., x) soluciona el problema del consenso
-   - Propiedad de asincronía: Las invocaciones a consenso(., x) no
-     necesariamente deben de ocurrir simultáneamente.
+      - Ventajas: No implica un problema para las aplicaciones, pues todo el
+        cambio es sobre hardware. Es mucho más fácil de implementar que el
+        escalamiento horizontal.
+      - Desventajas: El crecimiento está limitado por hardware. Una falla en el
+        servidor implica que la aplicación se detenga. No soporta alta
+        disponibilidad.
+
+    - Escalabilidad Horizontal :: Este modelo implica tener varios servidores
+      trabajando como un todo. Se crea una red de servidores conocida como
+      cluster, con la finalidad de repartirse el trabajo entre todos los nodos.
+
+      - Ventajas: El crecimiento es prácticamente infinito. Es posible combinarse
+        con el escalamiento vertical. Soporta alta disponibilidad. Si un nodo
+        falla, los demás siguen trabajando. Soporta el balanceo de carga.
+      - Desventajas: Requiere mucho mantenimiento. Es difícil de
+        configurar. Requiere de grandes cambios en el software. Requiere de
+        infraestructura más grande.
 
 
-   - Propiedad de consistencia :: En todo momento de la ejecución del algoritmo,
-     se cumple que las listas \(Q_i\) y  \(Q_j\) de dos procesos \(p_i\) y
-     \(p_j\) respectivamente, una es prefijo de la otra.
-   - Propiedad de progreso ::  Toda transacción enviada por un cliente, es
-     eventualmente procesada.
-   - Propiedad de acuerdo :: Todo servidor que responde a una transacción
-     \(<ID_T, T>\) envía el mismo resultado al cliente que lo generó.
+
+    #+caption: Escalamiento horizontal
+    #+attr_latex: :width 0.7\linewidth
+    #+label: escalamientoHorizontal
+    [[file:figs/dibujo41.png]]
+
+    Desde nuestra perspectiva, estudiaremos este problema hablando de la máquina
+    de estados replicada y la universalidad del consenso.  Para resolver el
+    problema, definimos una función =consenso(prop, inst)=, la cuál soluciona el
+    problema del consenso, es decir, proporciona terminación, validez y
+    acuerdo. Esta función trabajará como un módulo independiente de cada
+    servidor.  Describamos la forma en que deben de interactuar los clientes y
+    los servidores a través de un par de algoritmos.
+
+    #+caption: Máquina de estados replicada
+    #+attr_latex: :width 0.7\linewidth
+    #+label: escalamientoHorizontal
+    [[file:figs/dibujo42.png]]
 
 
-   Al final de cuentas, el sistema se comporta como si estuviera hecho de un
-   sólo servidor en el que las transacciones se ejecutan secuencialmente.
+    #+begin_lstlisting
+    Algoritmo Cliente:
+      Al tener una transaccion T:
+        Genera una src_latex{$ID_T$}
+        send(<src_latex{$ID_T$}, T>) a todos los servidores
+        Espera por respuesta de algun servidor y reporta respuesta
+    #+end_lstlisting
+
+    #+begin_lstlisting
+    Algoritmo servidor:
+      Q = lista de transacciones inicialmente vacia
+      r = 1
+      Ejecutar al recibir <src_latex{$ID_T$}, T> de algun cliente:
+        if not Q.contains(<src_latex{$ID_T$}, T>):
+          prop = <src_latex{$ID_T$}, T>
+          do
+            prop' = consenso(prop, r)
+            Q.addToEnd(prop')
+            Ejecutar localmente prop'
+            send(resp) a cliente
+            r = r + 1
+          while(prop src_latex{$\neq$} prop')
+    #+end_lstlisting
+
+    Consideremos consenso(., x): para una \(x \in \mathbb{N}\) especifico
+    - consenso(., x) soluciona el problema del consenso
+    - Propiedad de asincronía: Las invocaciones a consenso(., x) no
+      necesariamente deben de ocurrir simultáneamente.
 
 
-   - Universalidad del consenso :: El mismo algoritmo funciona para cualquier
-     problema/objeto/tarea que pueda especificarse
-     secuencialmente. Particularmente, cualquier algoritmo secuencial que se
-     ejecuta en un procesador, puede ejecutarse de forma distribuida.
+    - Propiedad de consistencia :: En todo momento de la ejecución del
+      algoritmo, se cumple que las listas \(Q_i\) y \(Q_j\) de dos procesos
+      \(p_i\) y \(p_j\) respectivamente, una es prefijo de la otra.
+    - Propiedad de progreso ::  Toda transacción enviada por un cliente, es
+      eventualmente procesada.
+    - Propiedad de acuerdo :: Todo servidor que responde a una transacción
+      \(<ID_T, T>\) envía el mismo resultado al cliente que lo generó.
+
+
+    Al final de cuentas, el sistema se comporta como si estuviera hecho de un
+    sólo servidor en el que las transacciones se ejecutan secuencialmente.
+
+    - Universalidad del consenso :: El mismo algoritmo funciona para cualquier
+      problema/objeto/tarea que pueda especificarse
+      secuencialmente. Particularmente, cualquier algoritmo secuencial que se
+      ejecuta en un procesador, puede ejecutarse de forma distribuida.
+
+
+* Sistemas asíncronos
 
 ** Consenso en sistemas asíncronos
 
    ¿Qué significa asíncrono para un sistema distribuido?
 
-   - Los mensajes se pueden retrasar indefinidamente.
+   - Los mensajes se pueden /retrasar indefinidamente/.
+   - Los procesos pueden /pausar/ su ejecución /arbitrariamente/.
+   - /No hay garantías/ de tiempo.
+
+   #+begin_obs
+   Si un proceso está por realizar un cómputo local y se retrasa, entonces, aún
+   puede realizar ese cómputo local, independientemente de los que hagan otros
+   procesos.
+   #+end_obs
+
+   - Algoritmo asíncrono :: Un algoritmo distribuido /asíncrono/ es un algoritmo
+     diseñado para ser ejecutado sobre un sistema distribuido asíncrono. En tal
+     sistema no hay una noción de tiempo externo. Esto es el porqué los sistemas
+     asíncronos son llamados en ocasiones /sistemas libres de tiempo/.
+
+     En un sistema asíncrono, el progreso de un proceso es asegurado por su
+     propia computación y los mensajes que él recibe. Cuando un proceso recibe
+     un mensaje, el procesa el mensaje y, acorde a su algoritmo local,
+     posiblemente le envíe mensajes a sus vecinos.
+
+     Un proceso procesa un mensaje a la vez. Esto significa que el
+     procesamiento de un mensaje no puede ser interrumpido por el arribo de otro
+     mensaje. Cuando un mensaje llega, este es añadido a un buffer de entrada
+     del proceso receptor. El va a ser proceso después de todos los mensajes que
+     le preceden en este buffer y estos hayan sido procesados.
+
+   - *Efecto de la asincronía* :: No es posible /distinguir/ el estado de un proceso
+     del que no se ha recibido mensaje, ya sea porqué es un /proceso lento/ o es
+     un /proceso fallido/. *Spoiler*: Esta es la razón por la que no se puede
+     resolver consenso en sistemas asíncronos.
+
+   Hasta ahora hemos estudiado el problema del consenso en sistemas síncronos,
+   pero, ¿qué pasa en sistemas asíncronos? En 1985, Michael J. Fischer, Nancy
+   A. Lynch y Michael S. Paterson, probaron uno de los resultados de
+   imposibilidad más importantes en el área de cómputo distribuido, el cual nos
+   dice que es imposible resolver el problema del consenso si hay al menos un
+   proceso fallido. El siguiente teorema fue enunciado en el artículo
+   ``Impossibility of Distributed Consensus with One Faulty Process''. A este
+   resultado es generalmente conocido como FLP85
+   [[cite:&DBLP_journals_jacm_FischerLP85]].
+
+   #+begin_theorem
+   En un sistema distribuido puramente asíncrono, el problema del consenso es
+   imposible de resolver si incluso un sólo proceso falla.
+   #+end_theorem
+
+   Sin embargo, gracias a este resultado, podemos buscar formas de resolver a
+   este problema relajando ciertas propiedades de los algoritmos de
+   consenso. Por lo que nos preguntamos ¿Cómo podemos evitar este resultado de
+   imposibilidad? Algunos cosas que podemos hacer son:
+
+   1. Suponer ciertas garantías del sistema.
+   2. Algoritmos probabilísticos.
+   3. Tolerar resultados erróneos.
+
+   A continuación, estudiaremos como podemos resolver el problema del consenso
+   en sistemas asíncronos utilizando alguna de las suposiciones anteriores.
 
 *** Tiempo y resultados de imposibilidad
 
+    Cuando trabajamos con los sistemas síncronos, hacemos una suposición fuerte:
+    Existe una sincronización de los relojes locales (relojes físicos) de cada
+    uno de los procesos en nuestros sistemas distribuidos. A menudo, los
+    sistemas distribuidos deben medir el tiempo:
+
+    - Calendarizadores, timeouts, detectores de fallas.
+    - Medidas de rendimiento, estadísticas.
+    - Logs y bases de datos, registro de eventos que sucedieron.
+    - Datos con validez temporal, registros de caché.
+    - Determinación de orden de eventos ocurridos a través de procesos.
+
+    #+begin_nota
+    Relojes en sistemas electrónicos (osciladores) \(\neq\) relojes en sistemas
+    distribuidos (generadores de timestamps).
+    #+end_nota
+
+    Los relojes con los que vamos a trabajar, los distinguiremos en dos: relojes
+    físicos y relojes lógicos. Para entender la problemática, describiremos el
+    error en los relojes físicos y cómo no es posible que estos puedan
+    sincronizarse.
+    A este tipo de error, se le conoce como *Drift*, a continuación describiremos
+    algunas propiedades de este problema:
+
+    - La mayoría de los relojes son fabricados utilizando /cristales de cuarzo/.
+    - Debido a errores de manufactura, algunos pueden ser más rápidos que otros.
+    - La frecuencia de oscilación varía con la temperatura.
+    - La velocidad con la que un reloj aumenta o reduce la frecuencia de
+      oscilación, se le conoce como drift.
+    - Otras soluciones sería el utilizar relojes atómicos o sincronización a
+      través de operaciones con GPS.
+
+    #+CAPTION: Drift en cristales de cuarzo conforme cambia la temperatura
+    #+ATTR_LaTeX: :width 0.7\textwidth
+    #+LABEL: fig:drift
+    [[./figs/drift.png]]
+
+    #+begin_nota
+    Los relojes atómicos utilizan propiedades atómicas para operar. De hecho, la
+    unidad de tiempo para un segundo en el Sistema Internacional de Unidades
+    (SI) se define como exactamente 9.192.631.770 períodos de una frecuencia de
+    resonancia particular del átomo de cesio-133.
+    #+end_nota
+
+    En las computadoras, el tiempo suele ser representado en distintos
+    formatos. Los más comunes son:
+
+    - UNIX Time: Número de segundos desde el 1 de enero de 1970 00:00:00
+      UTC. Ejemplo: 1636495334
+    - ISO 8601: Año, mes, día, hora, minuto, segundo y zona horaria respecto a
+      UTC. Ejemplo: 2021-11-09T22:03:41+0000
+
+    Esto representa un problema porque los formatos suelen ser incompatibles y
+    es necesario implementar algún tipo de traducción entre sistemas.
+
+    #+begin_nota
+    Estos relojes no cuenta los segundos bisiestos (o segundos intercalares), el
+    cual es un segundo que se añade a los relojes atómicos cada cierto tiempo,
+    de este modo, estos relojes están sincronizados con la rotación de la
+    tierra.
+
+    - \url{https://linube.com/blog/segundo-intercalar/}
+    - \url{https://es.wikipedia.org/wiki/Segundo_intercalar}
+    #+end_nota
+
+    Como podemos observar, tenemos varios problemas por sincronía, drift, manejo
+    de formatos en los sistemas distribuidos. ¿Cómo los abordamos?
+
+    #+CAPTION: Sin algún tipo de sincronización, los relojes marcan distintos tiempos.
+    #+ATTR_LaTeX: :width 0.5\textwidth
+    #+LABEL: fig:sincronization
+    [[./figs/dibujo43.png]]
+
+    Observemos un poco más acerca del problema de asincronía. Supongamos que
+    tenemos 3 procesos en una gráfica completa, los cuales envían mensajes entre
+    sí. Consideremos la siguiente /historia/:
+
+    - \(p_1\) envía el mensaje \(m_1\): La luna es de queso
+    - \(p_2\) envía el mensaje \(m_2\): No, no lo es
+
+    Si vemos el diagrama de la figura [[fig:asincrono]], \(p_3\) ve primero a
+    \(m_2\) y después a \(m_1\), esto a pesar de que \(m_1\) /suceda antes/ de
+    \(m_2\).
+
+    #+CAPTION: Envío de mensajes asíncronos.
+    #+ATTR_LaTeX: :width 0.5\textwidth
+    #+LABEL: fig:asincrono
+    [[./figs/dibujo46.png]]
+
+    Una solución a este problema sería el añadir timestamps, de modo que ahora
+    los procesos envíen tuplas de la forma \((t, message)\), donde t es el
+    timestamp del proceso. En nuestro ejemplo anterior, \(p_1\) y \(p_2\) envían
+    los siguientes mensajes (como se muestra en la figura [[fig:asincrono2]]:
+
+    - \(p_1\) envía el mensaje \((t_1, \text{"La luna es de queso"})\)
+    - \(p_2\) envía el mensaje \((t_2, \text{"No, no lo es"})\)
+
+    #+CAPTION: Envío de mensajes asíncronos.
+    #+ATTR_LaTeX: :width 0.5\textwidth
+    #+LABEL: fig:asincrono2
+    [[./figs/dibujo46.1.png]]
+
+    Sin embargo, incluso con relojes sincronizados, puede suceder que \(t_2 <
+    t_1\). El orden dado por los timestamps es inconsistente con el orden
+    esperado.
+
+
 *** Relación de causalidad
+
+    La relación de causalidad, es una relación entre dos eventos dentro de un
+    sistema distribuido, de modo que un evento sucede antes si este lo causa o
+    lo precede.
+
+    #+CAPTION: Precedencia de eventos
+    #+ATTR_LaTeX: :width 0.7\textwidth
+    #+LABEL: fig:happensbefore
+    [[./figs/dibujo44.png]]
+
+    Cuando hablamos de causalidad, supondremos dos cosas: (1) Estamos trabajando
+    en un sistema asíncrono (no hay relojes), (2) Consideramos un algoritmo
+    distribuido y buscamos encontrar un orden a los eventos. Decimos que un
+    evento \(e\) causa o provoca un evento \(e'\), si el evento \(e'\) no puede
+    ocurrir sin la existencia de \(e\). Podemos observar un ejemplo de esta
+    dinámica de interacción en la figura [[fig:happensbefore]].
+
+    #+begin_definition :options [Relación sucede-antes (happens-before)]
+    Sean \(e_1\) y \(e_2\) eventos de un algoritmo distribuido. Tenemos \(e_1
+    \implies e_2\), si se cumple alguno de los siguientes:
+
+    1. \(e_1\) y \(e_2\) son eventos del mismo proceso y \(e_1\) se ejecuta
+       antes de \(e_2\).
+    2. \(e_1\) es un evento de envío del mensaje \(m\) y \(e_2\) es la
+       recepción del mensaje \(m\).
+    3. \(\exists e \backepsilon e_1 \implies e \wedge e \implies e_2\)
+    #+end_definition
+
+
+    #+begin_nota
+    La relación \(\implies\) define un orden parcial sobre los eventos de una
+    ejecución. La relación /happens-before/ (\(\implies\)) es transitiva,
+    irreflexiva y antisimétrica:
+
+    1. \(\forall a, b, c\), si \(a \implies b\) y \(b \implies c\), entonces,
+       \(a \implies c\) (transitividad). Esto significa que para cualesquiera
+       tres eventos, \(a, b, c\), si \(a\) sucedió antes de \(b\), y \(b\)
+       sucedió antes de \(c\), entonces \(a\) sucedió antes de \(c\).
+    2. \(\forall a, a \nimplies a\) (irreflexiva). Esto significa que ningún
+       evento puede suceder antes de si mismo.
+    3. \(\forall a, b\), donde \(a \neq b\), si \(a \implies b\), entonces, \(b
+       \nimplies a\) (antisimetría). Esto significa que para cualesquiera dos
+       evento \(a, b\), si \(a\) sucede antes de \(b\), entonces \(b\) no puede
+       suceder antes de \(a\).
+    #+end_nota
+
+    #+begin_definition
+    Dada una ejecución en la que dos eventos \(e_1\) y \(e_2\) no están
+    relacionados, es decir, \(e_1 \nimplies e_2 \wedge e_2
+    \nimplies e_1\), si nos fijamos en el tiempo real, \(e_1\) puede
+    ocurrir antes de \(e_2\) o viceversa o incluso al mismo tiempo. A esos
+    eventos los llamamos *eventos concurrentes* y los denotamos \(e_1 || e_2\).
+    #+end_definition
+
+    De la definición anterior, para ejemplificar el concepto de concurrencia,
+    observemos la figura [[fig:concurrentevents]], en la que tenemos tres
+    eventos \(e_1, e_2, e_3\), podemos observar que: (1) \(e_1 \implies e_3\) y
+    (2) \(e_2 \nimplies e_1 \wedge e_1 \nimplies e_2\).
+
+
+    #+CAPTION: Concurrencia de eventos
+    #+ATTR_LaTeX: :width 0.45\textwidth
+    #+LABEL: fig:concurrentevents
+    [[./figs/dibujo45.png]]
+
+    De manera precisa, podemos decir que la noción de incertidumbre o
+    indistinguibilidad, se modela en parte, por los conjuntos de eventos que nos
+    comparables a la relación \(\implies\). Ahora nos interesa el problema
+    computacional asociado a la relación \(\implies\), es decir, ¿cómo los
+    procesadores pueden /observar/ la relación happens-before en una
+    ejecución? Es decir, buscamos diseñar un algoritmo, tal que para cada
+    evento \(e\) del algoritmo inicial, asignemos un tiempo lógico \(LT(e)\),
+    tal que para cualesquiera dos eventos \(e_1\) y \(e_2\), se cumpla lo
+    siguiente:
+
+    #+begin_equation
+    e_1 \implies e_2 \iff LT(e_1) < LT(e_2)
+    #+end_equation
+
 
 *** Relojes de Lamport
 
+    A partir de este momento, mostraremos como un cómputo distribuido puede ser
+    representado como un orden parcial sobre un conjunto de eventos producidos
+    por los procesos. Describiremos dos tipos de relojes: (1) Relojes de Lamport
+    o relojes lógicos, (2) Relojes vectoriales. Ambos nos ayudarán a capturar
+    dependencias causales en la ejecución de los algoritmos distribuidos sobre
+    sistemas asíncronos. Describamos en alto nivel el /algoritmo de relojes de
+    Lamport/:
+
+    1. Localmente, cada proceso tiene un contador \(t\) (reloj lógico) que es
+       incrementado en cada evento local \(e\).
+    2. Cada proceso asigna \(LT(e)\) a cada uno de sus eventos locales.
+       1. Cómputo local o envío de mensajes: \(t = t + 1\); \(LT(e) = t\).
+          En caso de envío: \(send(<M, LT(e)>)\).
+       2. \(e' = \) Recepción de mensaje \(<M, LT(e)>\); \(t = \max(t, LT(e)) +
+          1\); \(LT(e')  = t\).
+
+    Este algoritmo nos permite establecer una relación causal entre los eventos
+    de nuestro sistema distribuido.
+
+    #+attr_latex: :options [caption=Algoritmo de relojes de Lamport]
+    #+begin_lstlisting
+    Algoritmo RelojesLogicos(Alg Dist A):
+      t = 0
+
+      Al ejecutar un evento local (e) de A:
+        t = t + 1
+        LT(e) = t
+
+      Al ejecutar un envio (e) de A:
+        t = t + 1
+        LT(e) = t
+        send(<M, LT(e)>)
+
+      Al recibir un mensaje <M, LT(e)> (e'):
+        t = max(t, LT(e)) + 1
+        LT(e') = t
+    #+end_lstlisting
+
+    ¿Cómo evaluamos este algoritmo en la ejecución descrita en la figura
+    [[fig:ejecucionasin]]?
+
+    #+CAPTION: Ejecución asíncrona
+    #+ATTR_LaTeX: :width 0.7\textwidth
+    #+LABEL: fig:ejecucionasin
+    [[./figs/dibujo47.png]]
+
+    #+begin_affirmation
+    Si \(e_1 \implies e_2\), entonces \(LT(e_1) < LT(e_2)\)
+    #+end_affirmation
+
+    #+begin_proof
+    Para demostrar esta afirmación tenemos que probar tres casos: (1) eventos de
+    un mismo proceso, (2) eventos de distintos procesos y (3) Transitividad
+    entre eventos.
+
+    1. Si \(e_1\) y \(e_2\) son eventos consecutivos de un mismo proceso
+       \(\longrightarrow LT(e_1) < LT(e_2)\).
+    2. Si \(e_1\) y \(e_2\) son eventos de tipo envío y recepción
+       respectivamente \(\longrightarrow LT(e_1) < LT(e_2)\).
+    3. \textit{(Transitividad):} \(\exists\ F = \{f_0, f_1, \ldots, f_x \}
+       \backepsilon\ e_1 \implies f_0 \implies f_1 \ldots \implies f_x \implies
+       e_2\).  Por contradicción. Supongamos que \(LT(e_1) > LT(e_2)\). Para
+       cualesquiera \(f_i, f_j \in \{e_1, e_2\} \cup F\)
+         1. Si \(f_i \implies f_j\), \textit{por (1)}, entonces, \(LT(f_i) <
+            LT(f_j)\).
+         2. Si \(f_i \implies f_j\), \textit{por (2)}, entonces, \(LT(f_i) <
+           LT(f_j)\).
+       Por (1) y (2) \(\forall\ f_i, f_j \in \{e_1, e_2\} \cup F \backepsilon f_i
+       \implies f_j, \subset e_1 \implies f_0 \ldots f_x \implies e_2\)
+       \(\longrightarrow LT(f_i) < LT(f_j)\) \(\longrightarrow LT(e_1) < LT(f_1)
+       < \ldots < LT(f_x) < LT(e_2)\) (Sig. el algoritmo y usando inducción)
+       \(\longrightarrow LT(e_1) < LT(e_2) \longrightarrow
+       \bot\). *Contradicción*.
+    #+end_proof
+
+
 *** Relojes vectoriales
+
+    Ahora nos interesa saber, sí \(LT(e_1) < LT(e_2)\), entonces, ¿\(e_1
+    \implies e_2\)? La respuesta es que esta propiedad no se cumple con el
+    algoritmo que tenemos hasta el momento. Basta observar el tiempo lógico que
+    tiene el segundo evento de \(p_1\) y el tiempo lógico del tercer evento de
+    \(p_3\) en la figura [[fig:ejecucionasin]]. El motivo, de manera intuitiva, es
+    que \(\implies\) es un orden parcial, mientras que los naturales con \(<\)
+    son un orden total. Por lo que la información sobre la no-causalidad se
+    pierde. Una forma de solucionar esto, es utilizar un conjunto vectores
+    n-dimensionales y usar la relación \(<\).
+
+    #+attr_latex: :options [caption=Algoritmo de vectoriales]
+    #+begin_lstlisting
+    Algoritmo RelojesVectoriales(Alg Dist A, ID src_latex{$\in \{0,\ldots, n - 1\}$}):
+      VT = (0, ..., 0) // n entradas, num procesos
+      Al ejecutar un evento local (e) de A:
+        VT[ID] = VT[ID] + 1
+      Al ejecutar un envio (e) de A:
+        VT[ID] = VT[ID] + 1
+        send(<M, VT>)
+      Al recibir un mensaje <M, VT'> (e'):
+        VT[ID] = VT[ID] + 1
+        Para cada src_latex{$i \in \{0,\ldots,n-1\}, i \neq ID$}:
+          VT[i] = max(VT[i], VT'[i])
+    #+end_lstlisting
+
+    Al igual que en con el algoritmo de relojes lógicos, también queremos ver la
+    ejecución de este algoritmo en la ejecución asíncrona de la figura
+    [[fig:ejecucionasin]].
+
+    #+begin_definition
+    Dados 2 vectores \(v_1\) y \(v_2\) n-dimensionales sobre los naturales,
+    decimos que \(v_1 \le v_2\) si se cumple alguna de las siguientes:
+
+    1. \(v_1 == v2\), son iguales entrada a entrada
+    2. \(\forall i \in \{0,\ldots,n - 1\}, v_1[i] \le v_2[i]\)
+    #+end_definition
+
+    #+begin_definition
+    \(v_1 < v_2 \iff \forall i \in \{0,\ldots,n - 1\}, v_1[i] \le v_2[i] \wedge
+    v_1 \neq v_2\)
+    #+end_definition
+
+
+    #+begin_affirmation
+    label:affir:iffrelojesvectoriales
+    Si \(e_1 \implies e_2 \iff VT(e_1) \le VT(e_2)\).
+    #+end_affirmation
+
+    #+begin_exercise
+    Demostrar la cref:affir:iffrelojesvectoriales.
+    #+end_exercise
+
 
 *** Cortes
 
-*** Algoritmo de Paxos
+    Dada una ejecución E, decimos que \(e_1 \implies e_2\), (\(e_1\) sucede
+    antes de \(e_2\)), si se cumple alguna de las siguientes:
+
+    1. \(e_1\) y \(e_2\) son eventos del mismo proceso y \(e_1\) se ejecuta
+       localmente antes de \(e_2\).
+    2. \(e_1\) es un envío del mensaje \(m\) y \(e_2\) es la recepción de \(M\).
+    3. \(\exists e \backepsilon e_1 \implies e \wedge e \implies e_2\).
+
+    Dado un evento \(e\) de un proceso, su vista en ese momento son todas las
+    \(e' \backepsilon e' \implies e\). En todo momento, la vista de un proceso
+    es una parte del orden parcial inducido por \(\implies\).
+
+    #+CAPTION: Corte de la vista parcial de un proceso
+    #+ATTR_LaTeX: :width 0.7\textwidth
+    #+LABEL: fig:corteparcial
+    [[./figs/dibujo48.png]]
+
+    Estamos estudiando una primera formalización de los sistemas distribuidos,
+    donde:
+
+    1. Una ejecución de un sistema distribuido es un orden parcial.
+    2. La vista de un proceso en todo momento es sólo una parte de ese orden.
+
+    Con esto, podemos decir intuitivamente que en el fondo, el consenso, busca a
+    ayudar a extender el orden parcial. En los sistemas distribuidos, no hay un
+    observador omnisciente que pueda tomar una instantánea del estado del
+    sistema. Dicha capacidad sería deseable para resolver problemas tales como
+    el poder restaurar el sistema completo después de un fallo, determinar
+    cuando existe un deadlock en el sistema y determinar cuando una computación
+    ha terminado.  En su lugar los procesos de un sistema distribuido deben de
+    cooperar para alcanzar una instantánea (un snapshot) aproximado. La relación
+    de causalidad entre los eventos del sistema es útil para definir una
+    aproximación estática significante a un sistema que se encuentra cambiando
+    dinámicamente. Para lograr este objetivo, utilizaremos una técnica conocida
+    como /cortes consistentes/.
+
+    - *Cortes consistentes* :: Es una colección de estados locales, uno por
+      proceso, de modo que el sistema pueda /echarse a andar/, normalmente
+      poniendo a cada uno de los procesos en esos estados. Podemos observar un
+      ejemplo de un corte en la figura [[fig:corteparcial]].
+
+    Un corte \(\langle q_0, q_1, \ldots, q_n\rangle\) es consistente si
+    \(\forall \q_i\) no existe un evento \(e\) después del corte tal que \(e
+    \implies q_i\). Visualmente podemos distinguir entre cortes consistentes e
+    inconsistentes observando la figura [[fig:cortes]].
+
+    #+CAPTION: Un corte consistente y un corte inconsistente.
+    #+ATTR_LaTeX: :width 0.7\textwidth
+    #+LABEL: fig:cortes
+    [[./figs/dibujo49.png]]
+
+    Dado un evento \(q_i\) y (su estado local asociado), decimos:
+
+    #+begin_equation
+    vista(q_i) = {q_f \backepsilon q_f \implies q_i}
+    #+end_equation
+
+    Dado un corte \(C \backepsilon C = \{q_0,\ldots,q_{n-1}\}\), decimos:
+
+    #+begin_equation
+    vista(C) = \bigcup\limits_{q_i}vista(q_i)
+    #+end_equation
+
+    #+begin_definition
+    C es consistente \(\iff q_f \implies q_i\), entonces, \(q_f \in C\).
+    #+end_definition
+
+    #+begin_definition
+    C es consistente si \(\forall q_i \in C\ \nexists\ q_j \implies q'\) tal que
+    \(q' \implies q_i\).
+    #+end_definition
+
+    Si un corte es consistente, entonces, existe una ejecución en el mismo orden
+    parcial en las que los estados en el corte suceden simultáneamente, de forma
+    alternativa, el corte se puede pintar utilizar una linea vertical. Un
+    ejemplo de esto lo podemos observar en la figura [[fig:corteconsistente]].
+
+    #+CAPTION: Corte consistente
+    #+ATTR_LaTeX: :width 0.9\textwidth
+    #+LABEL: fig:corteconsistente
+    [[./figs/dibujo50.png]]
+
+    Podemos diseñar un algoritmo de Corte para nuestro sistema distribuido. La
+    idea es montar nuestros algoritmos distribuido sobre el algoritmo de corte.
+    Los canales de comunicación entregan los mensajes en un orden FIFO por
+    simplicidad. Este algoritmo es útil para encontrar una instantánea
+    (snapshot) distribuida. La idea de este algoritmo es decirle a los procesos
+    el momento en que deben computar el corte consistente. Otra aproximación es
+    encontrar el corte consistente maximal [[cite:&DBLP_books_daglib_0017536]].
+
+
+    #+attr_latex: :options [caption=Algoritmo de corte de un algoritmo distribuido]
+    #+begin_lstlisting
+    Alg Corte(Alg Dist A):
+      flag = false
+      Q = src_latex{$\bot$}
+
+      Al A enviar M:
+        enviar M a su destino
+
+      Al recibir M para A:
+        pasar M a A
+
+      Al recibir una senial de inicio o <Corte>:
+        if not flag then:
+          Q = mi estado local en A
+          flag = true
+          send(<Corte>) a mis vecinos
+    #+end_lstlisting
+
+
 
 *** Imposibilidad del consenso
 
+    Recordatorio: El problema del consenso es imposible en un sistema asíncrono
+    (FLP85). La ejecución es sobre la gráfica completa y a lo más hay una falla
+    de tipo paro (t = 1).
+
+    El problema radica en que tenemos un sistema asíncrono con una potencial
+    falla. Por la misma asincronía, no tenemos forma de detectar si un proceso
+    falló o simplemente se ha vuelto lento, es decir, no podemos detectar
+    fallas. Esto causa que tengamos incertidumbre y  tengamos ejecuciones en las
+    que no se puedan satisfacer de forma simultánea las tres propiedades de un
+    algoritmo de consenso (validez, terminación y acuerdo).
+
+    ¿Cómo podemos evitar el resultado de imposibilidad del consenso? Tenemos 3
+    opciones para realizar esto.
+
+    1. Suponer sistemas en los que se pueden detectar fallos.
+    2. Garantizar 2 de las 3 propiedades del consenso:
+       1. Relajar la propiedad de terminación (Paxos, algoritmos
+          probabilísticos).
+       2. Relajar la propiedad de acuerdo (variantes del consenso).
+
+
 ** Detectores de Fallos
+
+   Mecanismo para resolver consenso en sistemas asíncronos de paso de mensajes
+   con fallas de tipo paro. Este mecanismo permite distinguir entre procesos
+   lentos y procesos muertos. La idea principal es la de que cada proceso tenga
+   acceso a un módulo de detección de fallos que continuamente da un /estimado/ de
+   los procesos que han fallado. En este punto, la salida del detector de fallos
+   no necesita ser correcta, sólo dar un indicio acerca del estado del mundo. Se
+   dice que un detector de fallas (o el proceso al que está conectado) /sospecha
+   de un proceso en el tiempo t/, si la salida falla en ese momento. Los
+   detectores de fallas pueden /clasificarse/ en función de /cuando sus sospechas
+   son correctas/. Seguiremos el camino descrito en
+   [[cite:&10_48550_arxiv_2001_04235]].
+
+   Podemos mencionar que los detectores de fallas sólo son interesantes si estos
+   pueden construirse. Sin embargo, por [[cite:&DBLP_journals_jacm_FischerLP85]],
+   sabemos que en un sistema totalmente asíncrono, esto no es posible, pero
+   utilizando tiempos de espera (timeouts), podemos implementar detectores de
+   fallos. Enviamos /pings/ y si no responden, podemos sospechar de los
+   procesos. Este /ping/ es enviado de vez en cuando y podemos sospechar del
+   proceso si no recibimos respuesta dentro del tiempo máximo de ida y
+   vuelta. Este modelo conocido como semi-síncrono (/partial synchrony model/)
+   [[cite:&DBLP_journals_jacm_DworkLS88]], apunta a ser un punto intermedio entre
+   los sistemas síncronos y asíncronos que hemos estudiado hasta el momento. Una
+   suposición acerca del funcionamiento de esta técnica, es que los paquetes de
+   ping nunca se pierden y hay un límite finito superior (desconocido)
+   \(\Delta\) en la demora del mensaje y hay un evento especial llamado GST
+   (Global Stabilization Time). Informalmente en el modelo semi-síncrono, el
+   sistema se comporta asíncronamente hasta alcanzar GST y de forma síncrona
+   después de eso. Esto último nos permite describir lo que se conoce como un
+   *detector de fallas eventualmente perfecto*.
+
+*** Detector \(\hat{P}\)
+
+    Con la ayuda de la información del detector de fallas, podemos solucionar el
+    consenso. Describimos el detector de fallas \(\hat{P}\) (figura [[fig:detector]]):
+
+    1. El detector de fallos provee de una variable local (/suspect/) a cada
+       proceso, todas ellas diferentes y de sólo lectura.
+    2. En todo momento /suspect/, es el conjunto de procesos que fallaron en la
+       ejecución durante la ronda t y que han fallado anteriormente.
+
+    #+CAPTION: Detector de fallo \(\hat{P}\)
+    #+ATTR_LaTeX: :width 0.6\textwidth
+    #+LABEL: fig:detector
+    [[./figs/dibujo56.png]]
+
+    El algoritmo asociado al detector de fallos \(\hat{P}\) lo describimos a
+    continuación:
+
+    #+attr_latex: :options [caption=Algoritmo de consenso \hat{P}]
+    #+begin_lstlisting
+    Algoritmo src_latex{$consenso\hat{P}$}(prop):
+      Muertos = src_latex{$\hat{p}$}.suspect
+      send(<prop>) a todos los vecinos
+
+      esperar hasta que las propuestas de todos los que no
+      estan muertos se hayan recibido (descartar otros mensajes)
+
+      decidir la propuesta menor
+    #+end_lstlisting
+
+    A pesar de ser muy sencillo, este algoritmo no se puede implementar en la
+    realidad, esto implica que \(\hat{P}\) no es interesante (pero nos da una
+    pauta de como abordar el problema). Buscaremos detectores de fallos ``más
+    débiles'', que permitan solucionar el problema del consenso, de modo que si
+    podamos implementarlos. Una restricción que buscamos es que el detector
+    devuelva la menor cantidad de información acerca de las fallas.
+
+*** Clasificación de detectores de fallas
+
+    Vamos a clasificar los detectores de fallos basándonos en el momento en que
+    sospechan de procesos defectuosos y procesos no defectuosos. En la sospecha
+    de fallo, los procesos se incluyen en la categoría de completitud; en el
+    caso de procesos no fallidos, en precisión.
+
+
+    - *Grados de completez* ::
+
+    1. Completez fuerte: Todo proceso fallido eventualmente entra en sospecha de
+       manera permanente por todos los procesos no-fallidos.
+    2. Completez débil: Todo proceso fallido eventualmente entra en sospecha de
+       manera permanente por algunos procesos no fallidos.
+
+    Hay dos operadores lógicos temporales incrustados en estas declaraciones:
+    ``eventualmente entra en sospecha de manera permanente'', significa que hay
+    algún tiempo \(t_0\) tal que para todos los tiempos \(t \ge t_0\), se
+    sospecha del proceso. Hay que tener en cuenta que la integridad no dice nada
+    sobre la sospecha de procesos no defectuosos: un detector de fallas
+    paranoico que sospecha permanentemente que todos tienen una gran integridad.
+
+    - *Grados de precisión* :: Estos describen lo que sucede con los procesos no
+      defectuosos y con los procesos defectuosos que aún no se han bloqueado
+
+    1. Precisión fuerte: Ningún proceso entra en sospecha (por cualquiera) antes
+       de fallar.
+    2. Precisión débil: Algunos procesos no-fallidos nunca entran en sospecha.
+    3. Precisión eventual fuerte: Después de cierto periodo de confusión, ningún
+       proceso entra en sospecha antes de fallar.
+    4. Precisión eventual débil: Después de algún periodo inicial de confusión,
+       algunos procesos no-fallidos nunca entran en sospecha.
+
+    Tenga en cuenta que ``fuerte'' y ``débil'' significan cosas diferentes para
+    la precisión contra la completez: para la precisión, estamos cuantificando
+    sobre los sospechosos, y para la completitud, estamos cuantificando los que
+    sospechan. Incluso un detector de fallas con precisión débil garantiza que
+    todos los procesos confían en los procesos visiblemente buenos.
+
+    Podemos mejorar cualquier detector de fallas con completez débil a uno con
+    completez fuerte. La diferencia entre completez fuerte y completez débil es
+    que en la versión débil alguien sospecha sobre un proceso muerto, mientras
+    que en la versión fuerte, todos sospechan. No queremos perder la precisión
+    sobre el proceso, así que necesitamos deshacer el rumor prematuro de la
+    muerte de algún proceso.  La forma sencilla es dejar que el cadáver hable
+    por sí mismo: Yo sospecharé de ti desde el momento en que alguien me reporte
+    que estás muerto hasta el momento en que tu me reportes lo contrario.
+
+    Lo que es un poco más complicado es demostrar que conserva la precisión. La
+    idea esencial es la siguiente: si hay algún proceso p bueno en el que todos
+    confían para siempre (como en la precisión débil), entonces nadie informa de
+    p como sospechoso; esto también cubre una precisión fuerte, ya que la única
+    diferencia es que ahora todos los elementos no defectuosos proceso cae en
+    esta categoría. Para una eventual precisión débil, espere a que todos dejen
+    de sospechar de p, espere a que se entreguen todos los mensajes que emitan
+    p, y luego espere a que p envíe un mensaje a todos. Ahora todo el mundo
+    confía en p, y nadie vuelve a sospechar de p. La precisión eventual fuerte
+    es similar.
+
+    Si un p falla, algún detector débil sospechará de él y le avisará a lo demás
+    y p nunca lo contradecirá. Así, eventualmente todos sospecharán de p.
+
+    ¿Cómo preservar la precisión? (1) Hay un p en el que todos confían por
+    siempre. (2) Nadie informa de p como sospechoso. (3) Para una precisión
+    débil, esperar a que todos dejen de sospechar de p, esperar a que se
+    entreguen los mensajes restantes de p y esperar a que p les envíe un mensaje
+    a todos. (4) Todos confían en p y nadie vuelve a sospechar de él.
+
+    Dos grados de completez por cuatro grados de precisión nos dan ocho clases
+    de detectores de fallos. Pero cómo podemos mejorar la completez débil a la
+    fuerte, podemos sólo considerar las cuatro clases más fuertes:
+
+    - P (perfecto) Fuertemente completa y fuertemente precisa: nunca se sospecha
+      de procesos no-fallidos; todo el mundo sospecha eventualmente de procesos
+      fallidos.
+    - S (Fuerte) Fuertemente completa y débilmente precisa: nunca se sospecha de
+      procesos no-fallidos; algunos sospechan eventualmente de procesos
+      fallidos.
+    - \(\Diamond P\) (Eventualmente perfecto) Fuertemente completa y con
+      precisión eventual fuerte: nunca se sospecha de procesos no-fallidos;
+      después de cierto periodo de confusión, ningún proceso entra en sospecha
+      antes de fallar.
+    - \(\Diamond S\) (Eventualmente fuerte) Fuertemente completa y con precisión
+      eventual débil: nunca se sospecha de procesos no-fallidos; después de
+      algún periodo inicial de confusión, algunos procesos no-fallidos nunca
+      entran en sospecha.
+
+
+    #+attr_latex: :options [caption=Mejorando completez]
+    #+begin_lstlisting
+    Inicialmente hacer:
+      Sospechosos = src_latex{$\emptyset$}
+
+    Mientras sea verdadero:
+	  Sea S el conjunto de todos los procesos que mi detector debil sospecha.
+      Enviar S a todos los procesos
+
+    Al recibir S de q hacer:
+      Sospechosos = src_latex{$(\text{Sospechosos} \cup S) \ {q}$}
+    #+end_lstlisting
+
+    \(P\) es fácilmente alcanzado en sistemas síncronos. P puede simular
+    cualquier otra de las clases, S y \(\Diamond P\) pueden simular a \(\Diamond
+    S\), pero no puede simular a P o entre sí, y \(\Diamond S\) no puede simular
+    a cualquiera de los otros.
+
+    De este modo, \(\Diamond S\) es la clase de detectores de fallos más débiles
+    de esta lista. Sin embargo, \(\Diamond S\) es suficientemente fuerte para
+    resolver consenso, y de hecho cualquier detector de fallos (cualquiera sean
+    sus propiedades) que pueda resolver consenso, es lo suficientemente fuerte
+    para simular \(\Diamond S\).
+
+    #+CAPTION: Sistemas parcialmente asíncronos: Hay asincronía pero eventualmente llega a un periodo de estabilización en el que el sistema se comporta de manera casi síncrona.
+    #+ATTR_LaTeX: :width 0.7\textwidth
+    #+LABEL: fig:sincroniaparcial
+    [[./figs/dibujo57.png]]
+
+    #+CAPTION: Orden parcial de las clases de los detectores de fallas. Clases superiores puede simular clases inferiores, pero no viceversa.
+    #+ATTR_LaTeX: :width 0.5\textwidth
+    #+LABEL: fig:detectores
+    [[./figs/dibujodetectores.png]]
+
+*** Detector de fallo perfecto P
+
+    - Cada proceso \(p_i\) tiene una variable local \(\text{suspect}_i\) que es
+      un conjunto que sólo \(p_i\) puede leer.
+    - El rango de este detector de fallos es el conjunto de los ID's de los
+      procesos.
+    - Intuitivamente, en cualquier momento \(\text{suspect}_i\) contiene las
+      identidades de los procesos que \(p_i\) considera que han fallado.
+
+    Formalmente:
+
+    - \(\Pi = \{1, \ldots, n\}\)
+    - \(F(t)\) denota el conjunto de los procesos fallidos en el tiempo \(t\).
+    - \(CORRECT(F)\) el conjunto de procesos no fallidos.
+    - \(FAULTY(F)\) el conjunto de procesos fallidos.
+    - Observen \(CORRECT(F)\) y \(FAULTY(F)\) definen una partición sobre
+      \(\Pi\)
+    - \(Alive(t) = \Pi \backslash F(t)\): el conjunto procesos no fallidos en el
+      tiempo t.
+
+    El detector de fallos P tiene las siguientes propiedades:
+
+    - *Fuertemente completo* :: Eventualmente todas las listas /suspect/ contienen a
+      todos los procesos incorrectos. Formalmente: \(\exists\ t \in \mathbb{N}
+      \ |\ \forall\ t'\ \ge t\ |\ \forall\ i \in CORRECT(F),\ \forall j \in
+      FAULTY(F)\ j\ \in\ suspect_i^{t'}\).
+
+    - *Precisión fuerte* :: Ningún proceso entra en sospecha antes de
+      fallar. Formalmente: \(\forall\ t\ \in\ \mathbb{N}\ |\ \forall\ i,\ j\
+      \in\ Alive(t)\ j\ \notin\ suspect_i^{t}\).
+
+    El detector de fallos P es fácil de diseñar, pero debido a la asincronía de
+    los procesos y los mensajes, un proceso no puede distinguir si otro proceso
+    ha fallado o es muy lento, haciendo imposible implementar un detector de
+    fallos de la clase P, esto sin enriquecer el sistema síncrono subyacente con
+    suposiciones relacionadas con sincronía.
+
+    ¿Y como se vería un algoritmo para este detector de fallos? Definamos
+    nuestro sistema en el que trabajaremos.
+
+    - *Sistema* :: Existe una \(\Delta\) conocida tal que algún momento todos los
+      mensajes se envían y se procesan en \(\Delta\) unidades de tiempo local.
+
+    - *Modelo* :: Gráfica completa y \(t \le n - 1\).
+
+    #+attr_latex: :options [caption=Detector de fallos P]
+    #+begin_lstlisting
+    Alg P:
+      Suspect = src_latex{$\emptyset$}
+      Timeout = [1,...,n]
+
+      Al iniciar y despues de cada src_latex{$2\Delta$} unidades de tiempo:
+	    Enviar <PING> a cada vecino src_latex{$p_i$}
+	    src_latex{$Timeout[i] = clock()$}
+
+      Al recibir <PING> de src_latex{$p_i$}:
+	    Enviar <PONG> a src_latex{$p_i$}
+
+      Al recibir <PONG> de src_latex{$p_i$}:
+	    src_latex{$Timeout[i] = clock()$}
+	    Suspect = src_latex{$Suspect \setminus \{i\}$}
+
+      Al cumplirse src_latex{$clock() - Timeout[i] > 2\Delta$} para src_latex{$p_i$}:
+	    Suspect = src_latex{$Suspect \cup \{i\}$}
+    #+end_lstlisting
+
+*** Detector de fallas \(\Diamond P\)
+
+    Similar a la clase P, la clase de los detectores de fallos eventualmente
+    perfectos \(\Diamond P\) proveen a cada un proceso un conjunto suspect\(_i\)
+    que satisfacen la siguiente propiedad: Los conjuntos suspect\(_i\) pueden
+    arbitrariamente dar valores de salida durante un periodo finito pero
+    desconocido de tiempo, después de eso, su salida es igual a la de un
+    detector de fallas perfecto.
+
+    - *Fuertemente completo* :: Eventualmente todas las
+      listas /suspect/ contienen a todos los procesos incorrectos.
+      Formalmente: \(\exists\ t \in \mathbb{N} \ |\ \forall\ t'\ \ge t\ |\
+      \forall\ i \in CORRECT(F),\ \forall j \in FAULTY(F)\ j\ \in\
+      suspect_i^{t'}\).
+    - *Precisión eventual fuerte* :: Después de cierto periodo de confusión,
+      ningún proceso entra en sospecha antes de fallar.
+      Formalmente: \(\exists\ t\ \in \mathbb{N}\ |\ \forall\ t'\ \ge\ t\
+      \forall\ i,\ j\ \in Alive(t')\, j\ \notin\ suspect_i^{t'}\).
+    Describamos nuestro sistema para el algoritmo para el detector de fallas
+    \(\Delta P\):
+
+    - Sistema :: Existe una \(\Delta\) desconocida tal que en algún momento
+      todos los mensajes se envían y se procesan en ∆ unidades de tiempo local.
+    - Modelo :: Gráfica completa
+
+    #+attr_latex: :options [caption=Algoritmo \(\Delta P\)]
+    #+begin_lstlisting
+    Alg src_latex{$\Delta P$}:
+      Suspect = src_latex{$\emptyset$}
+      Timeout = [1,...,n]
+      src_latex{$\Delta$} = 1
+
+    Al iniciar y despues de cada src_latex{$2\Delta$} unidades de tiempo:
+	  Enviar <PING> a cada vecino src_latex{$p_i$}
+      src_latex{$Timeout[i] = clock()$}
+
+    Al recibir <PING> de src_latex{$p_i$}:
+	  Enviar <PONG> a src_latex{$p_i$}
+
+    Al recibir <PONG> de src_latex{$p_i$}:
+	  src_latex{$Timeout[i] = clock()$}
+	  if src_latex{$p_i \in$} Suspect then
+        Suspect = src_latex{$Suspect \setminus \{pi\}$}
+        \(\Delta = 2\Delta\)
+
+    Al cumplirse src_latex{$clock() - Timeout[i] > 2\Delta$} para algun src_latex{$p_i$}:
+	  Suspect = src_latex{$Suspect \cup \{i\}$}
+    #+end_lstlisting
+
+
+*** Consenso con detectores de fallos S
+
+    El detector de fallos S tiene las siguientes propiedades:
+
+    - *Fuertemente completo* :: Eventualmente todas las listas suspect contienen a
+      todos los procesos incorrectos. Formalmente: \(\exists\ t \in \mathbb{N}
+      \ |\ \forall\ t'\ \ge t\ |\ \forall\ i \in CORRECT(F),\ \forall j \in
+      FAULTY(F)\ j\ \in\ suspect_i^{t'}\).
+    - *Precisión débil* :: Algunos procesos entran en sospecha antes de
+      fallar. Formalmente: \(\forall\ t\ \in\ \mathbb{N}\ |\ \exists\ i,\ j\ \in
+      Alive(t)\ j\ \in\ suspect_i^{t}\).
+
+
+    - Con el detector S, podemos resolver consenso para cualquier número de
+      fallos (hasta n - 1).
+    - En este modelo, los detectores de fallos aplicados a la mayoría de los
+      procesos son completamente inútiles. Sin embargo, hay un proceso c no
+      fallido del que nadie sospecha y este es suficiente para resolver el
+      consenso hasta con n - 1 fallas.
+    - La idea básica del protocolo: Hay tres fases, en la primera fase, los
+      procesos intercambian información sobre los valores de entrada para n - 1
+      rondas asíncronas. En la segunda fase, intercambian todos los valores que
+      han visto y eliminan los que no son conocidos por todos. En la tercera
+      fase, cada proceso el ID más pequeño de su vista.
+
+    Cada proceso p mantiene dos conjuntos conjuntos \(V_p\) y \(\delta p\),
+    donde \(V_p\) contienen todos los valores de entrada \(<q, v_q>\)  que p ha
+    visto y \(\delta p\) solo los valores visto en la ronda asíncrona más
+    reciente.
+
+    #+attr_latex: :options [caption=Consenso utilizando el detector de fallos S]
+    #+begin_lstlisting
+    src_latex{$V_p = \{\langle p, v_p\rangle\}$}
+    src_latex{$\delta p = \{\langle p, v_p\rangle\}$}
+    // Phase 1
+    for i = 1 to n -1 do:
+      send(src_latex{$\langle i, \delta_p\rangle$}) to all processes
+      Wait to receive src_latex{$\langle i, \delta_p\rangle$} from all src_latex{$q$} I dont suspect
+      src_latex{$\delta p = (\bigcup_q \delta_q) \setminus V_p$}
+      src_latex{$V_p = (\bigcup_q \delta_q) \cup V_p$}
+    // Phase 2
+    send(src_latex{$\langle n, V_p\rangle$}) to all processes
+    Wait to receive src_latex{$\langle n, V_p\rangle$} from all src_latex{$q$} I dont suspect
+    \(V_p = (\bigcap_q V_q) \cap V_p\)
+    \\ Phase 3
+    return some input from \(V_p\) chosen via a consistent rule
+    #+end_lstlisting
+
+
+    #+begin_affirmation
+    El algoritmo de consenso utilizando el detector de fallos S, resuelve el
+    problema del consenso.
+    #+end_affirmation
+
+    #+begin_proof
+
+    - *Validez* :: Cada \(V_p\) contiene sólo valores de entrada. (Fase 1, Fase 2,
+      Fase 3)
+    - *Terminación* :: Nadie espera por siempre por un mensaje, dado que el
+      detector de fallos \(S\) eventualmente informa al proceso de los fallidos.
+    - *Acuerdo* :: Todo \(V_p\) es igual. En particular \(V_p\) = \(V_c\).  En la
+      fase 1 tenemos que observar que \(Vc \subseteq V_p\) para toda \(p\) al
+      final de la fase. Consideramos dos casos:
+      1. Si \(v = <q, v_q> \in V_c\) y \(c\) lo aprende antes de la ronda \(n -
+         1\), entonces \(c\) envía \(v\) a \(p\) antes de la ronda \(n - 1\),
+         \(p\) lo recibe (porque nadie sospecha de \(c\)) y lo añade a su
+         \(V_p\).
+      2. Si \(v = <q, v_q> \in V_c\) y \(c\) lo aprende sólo en la ronda \(n -
+         1\), entonces \(v\) fue enviado previamente a través de \(n - 1\)
+         procesos. Cada proceso \(p \neq c\) añadió a \(v\) a su \(V_p\) antes
+         de enviarlo, por lo que \(v\) está en \(V_p\).
+      Para la fase 2, se elimina cualquier elemento extra en \(V_p\), por las
+      intersecciones hechas, de ahí se sigue que \(V_p = Vc\) para todo \(p\).
+      Finalmente en la fase 3, todos aplican la misma regla de selección y
+      tenemos acuerdo.
+    #+end_proof
+
+*** Consenso con \(\Delta S\) y \(f < \frac{n}{2}\)
+
+    El consenso para S necesita de un proceso \(c\) que nunca sea sospechoso. Si
+    sospechan de \(c\), no se puede resolver el consenso. Para el consenso con
+    \(\Delta S\) necesitamos asumir menos de \(\frac{n}{2}\) fallas. El
+    protocolo resultante es conocido como protocolo de consenso Chandra Toueg,
+    el cuál es estructuralmente similar a Paxos. Se diferencia en que en lugar
+    de que los proposers vaya apareciendo así sin más, el protocolo se divide en
+    rondas con un coordinador rotante \(p_i\) en cada ronda \(r\) con \(r \equiv
+    i (\mod n)\).
+
+    El protocolo de consenso utiliza como subrutina un protocolo para
+    transmisión confiable.
+
+    #+attr_latex: :options [caption=Reliable broadcast]
+    #+begin_lstlisting
+    procedure broadcast(m):
+      send(m) to all processes
+
+    upon receive m do:
+      if I haven't seen m before then
+        send(m) to all processes
+        deliver m to myself
+    #+end_lstlisting
+
+    Podemos describir el protocolo de consenso como sigue:
+
+    1. Cada procesos mantiene un seguimiento de una preferencia (inicialmente su
+       propia entrada) y un timestamp.
+    2. El proceso avanza a través de una serie de rondas asíncronas, cada una
+       dividida en cuatro fases:
+       1. Todos los procesos envía (ronda, preferencia, timestamp) al
+          coordinador de la ronda.
+       2. El coordinador espera a escuchar la mayoría. El coordinador establece
+          su preferencia a alguna preferencia con el timestamp más grande y
+          envía (ronda, preferencia) a todos los procesos.
+       3. Cada proceso espera por la propuesta del coordinador o por su
+          fallo. Si recibe una nueva preferencia, la toma como propia,
+          estableciendo el timestamp a la ronda actual y envía (round, ack) al
+          coordinador. En otro caso, envía (round, nack) al coordinador.
+       4. El coordinador espera para recibir ack o nack de una mayoría de los
+          procesos. Si recibe ack de la mayoría, anuncia la preferencia actual
+          como el valor de decisión del protocolo utilizando transmisión
+          confiable.
+    3. Cualquier proceso que recibe un valor con la transmisión confiable, lo
+       decide inmediatamente.
+
+
+    #+attr_latex: :options [caption=Consenso con \(\Delta S\)]
+    #+begin_lstlisting
+    preference = input
+    timestamp = 0
+    for round = 1 to \(\infty\) do:
+      send(src_latex{$\langle round r, preference p, timestamp t\rangle$}) to coordinator
+      if I'm the coordinator then
+        Wait to receive src_latex{$\langle r, p, t\rangle$} from majority of processes
+        Set preference to value with largest timestamp
+        send(src_latex{$\langle round, preference\rangle$}) to all processes
+      Wait to receive src_latex{$\langle round, preference'\rangle$} from  coordinator or to suspect coordinator
+      if I received src_latex{$\langle round, preference'\rangle$} then
+        preference = preference'
+        timestamp = round
+        send(ack(round)) to coordinator
+      else
+        send(nack(round)) to coordinator
+      if I'm the coordinator then
+        Wait to receive ack(round) or nack(round) from a majority of processes
+        if I received no nack(round) messages then
+          Broadcast preference using reliable broadcast
+    #+end_lstlisting
+
+    #+begin_affirmation
+    El algoritmo de consenso con \(\Delta S\) resuelve el problema del consenso
+    #+end_affirmation
+
+    #+begin_proof
+    - *Validez* :: El valor de decisión es un estimado y todos los estimados
+      inician como entradas.
+    - *Terminación* :: Ningún proceso se queda atorado en las fases 1, 2, o 4,
+      porqué o no espera por nadie o espera por una mayoría de procesos no
+      fallidos que ya han decidido. Tenemos que ver qué pasa con los procesos
+      que dejan de participar en el protocolo. Como cualquier proceso no fallido
+      retransmite el valor de decisión usando la transmisión confiable,
+      eventualmente obtendrá el valor de decisión y terminará. En la fase 3, un
+      proceso puede quedarse esperando a un coordinador muerto, pero por S,
+      podemos sospechar de él y eventualmente salir. En el peor de los casos
+      tendremos un número finito de rondas.  Ahora supongamos que hay un proceso
+      c del que nadie sospecha, entonces en alguna ronda le toca ser el
+      coordinador y en la fase 3 todos los procesos esperan a \(c\) y responden
+      con \(ack\). \(c\) decide sobre el valor y lo envía usando la transmisión
+      confiable, permitiendo que todos decidan.
+    - *Acuerdo* :: Es posible que dos coordinadores inicien una transmisión
+      confiable y algunos procesos elijan el valor del primero y algunos el
+      valor del segundo. Pero en este caso, el primer coordinador recopiló
+      \(acks\) de la mayoría de los procesos en alguna ronda r, y todos los
+      coordinadores recopilaron estimaciones de una mayoría superpuesta de
+      procesos en alguna ronda \(r_k > r\).
+    #+end_proof
+
+** Algoritmos probabilísticos
+
+   Objetivo inicial en ciencias de la computación: Buscar soluciones
+   deterministas que solucionen un problema de forma exacta.
+
+   Determinismo es costoso en varios casos relevantes.
+
+   - Problemas NP-Completos.
+   - Grandes cantidades de datos (Big Data).
+   - Pruebas de primalidad.
+
+   Para este tipo de problemas un algoritmo \(O(n^2)\) puede ser prohibitivo.
+   Un algoritmo probabilístico es una máquina de estados que tiene una fuente de
+   información aleatoria para la toma de decisiones (cambio de estado).
+
+   #+CAPTION: Algoritmo determinista
+   #+ATTR_LaTeX: :width 0.7\textwidth
+   #+LABEL: fig:algdet
+   [[./figs/dibujodeterministico.png]]
+
+   #+CAPTION: Algoritmo probabilista
+   #+ATTR_LaTeX: :width 0.7\textwidth
+   #+LABEL: fig:algprob
+   [[./figs/dibujoproba.png]]
+
+*** Introducción
+
+    Veamos un ejemplo entre un algoritmo determinista y uno
+    probabilístico. Queremos determinar cuando dos polinomios computan la misma
+    función. Comenzamos con la versión determinista.
+
+    Entrada: Dos polinomios de grando n.
+
+    #+begin_equation
+    \begin{array}{l}
+       P(x) = \sum\limits_{i=0}^{n}c_ix^n \text{(forma canónica)}\\
+       Q(x) = \text{no necesariamente en forma canónica}\\
+       salida = \left\{\begin{array}{ll}
+                    true & P(x) = Q(x)\\
+                    false & P(x) \neq Q(x)\\
+               \end{array}\right.
+    \end{array}
+    #+end_equation
+
+    Solución determinista:
+
+    1. Llevar a Q(x) a su forma canónica.
+    2. Comparar termino a termino P(x) y Q(x)
+    3. Regresar true si y sólo si todos los términos son iguales. De otra forma
+       regresar false.
+
+    Veamos la versión probabilística.
+
+    Entrada: Dos polinomios de grando n.
+
+    #+begin_equation
+      \begin{array}{ll}
+        P(x) =& \sum\limits_{i=0}^{n}c_ix^n \text{(forma canónica)}\\
+        Q(x) =& \text{no necesariamente en forma canónica}\\
+        salida =& \left\{\begin{array}{ll}
+                        true & P(x) = Q(x)\\
+                        false & P(x) \not= Q(x)\ \text{con
+                                cierta probabilidad} > 0\\
+                      \end{array}\right.
+      \end{array}
+    #+end_equation
+
+    Solución probabilística:
+    1. r = entero elegido de forma uniforme entre \(\{1, \ldots, 100n\}\)
+    2. f = calcular P(r), g = calcular Q(r)
+    3. if f == g then return true else return false.
+
+    Análisis: El algoritmo regresa true sí
+    1. \(P(x) = Q(x)\): Este caso no importa cual sea el valor de r que se tome, ya
+       que f y g siempre serán el mismo valor. Devuelve true.
+    2. \(P(x) \neq Q(x)\): x es raíz de \(R(x) = P(x) - Q(x)\). Dado que R(x)
+       tiene a lo más grado n, el no puede tener más de n raíces. El espacio
+       \(\{1, \ldots, 100n\}\) tiene a lo más n enteros en el que el algoritmo
+       falla.
+
+    Podemos observar que: \(\text{Prob error} \le n * \frac{1}{100n} =
+    \frac{1}{100}\) y ahora podemos dar una salida más precisa:
+
+    #+begin_equation
+    \begin{array}{ll}
+       salida =& \left\{\begin{array}{ll}
+                        true & P(x) = Q(x)\ \text{con probabilidad de error}\ \frac{1}{100}\\
+                        false & P(x) \not= Q(x)\\
+                      \end{array}\right.
+    \end{array}
+    #+end_equation
+
+       ¿Cómo podemos mejorar el algoritmo?
+
+    Mejora al algoritmo:
+    1. Fijar un parámetro de seguridad k (por ejemplo k = 5)
+    2. Ejecutar k veces el algoritmo consecutivamente
+    3. Regresar true sólo si las k ejecuciones regresan true. Regresar false de
+       otra forma.
+
+    Análisis:
+    1. \(P(x) = Q(x)\): Devuelve true
+    2. \(P(x) \neq Q(x)\): Para que devuelva true, las k ejecuciones debieron de
+       devolver true.
+
+    \(\frac{1}{100}*\ldots*\frac{1}{100} = \frac{1}{100^k} \leftarrow
+    \text{Probabilidad de error}\)
+
+    #+begin_equation
+    \begin{array}{ll}
+      salida =& \left\{\begin{array}{ll}
+                        true & P(x) = Q(x)\ \text{con probabilidad de error} \frac{1}{100^k}\\
+                             & \text{para algún parámetro de seguridad k}\\
+                        false & P(x) \not= Q(x)\\
+                      \end{array}\right.
+    \end{array}
+    #+end_equation
+
+*** Clasificación de algoritmo aleatorios
+
+
+    Distintos algoritmos probabilísticos ofrecen garantías distintas sobre la
+    probabilidad de obtener una salida correcta o incluso de reconocer una salida
+    correcta.
+    Estas garantías distintas han establecido nombres en la literatura sobre
+    algoritmos probabilísticos y corresponden a varias clases de complejidad en
+    la teoría de la complejidad.
+    Mostramos dos clases de algoritmos probabilísticos:
+
+    - *Algoritmo tipo Las Vegas* :: Este tipo de algoritmo falla con alguna
+      probabilidad, pero podemos decir cuándo va a fallar. En particular,
+      podemos ejecutarlo nuevamente hasta que funcione, lo cual significa que
+      eventualmente funcionará con probabilidad 1 (pero con una cantidad no
+      acotada de tiempo). Alternativamente, podemos pensar que es un algoritmo
+      que siempre funcionará pero lo hará en una cantidad de tiempo
+      impredecible.
+
+    - *Algoritmo tipo Monte Carlo* :: Este tipo de algoritmo falla con alguna
+      probabilidad, pero no podemos decir cuándo va a fallar. Si el algoritmo
+      produce una respuesta si/no y la probabilidad de falla es
+      significativamente menor que ½, podemos reducir la probabilidad de falla
+      al ejecutarlo varias veces y tomar una mayoría de las respuestas.  El
+      algoritmo de prueba de igualdad de polinomios es un ejemplo de un
+      algoritmo de tipo Monte Carlo.
+
+    La heurística para recordar qué clase es cuál, es que los nombres fueron
+    elegidos para atraer a los angloparlantes: en Las Vegas, el repartidor puede
+    decirte si has ganado o perdido, pero en Montecarlo, /le croupier ne parle
+    que Français/, por lo que ustedes no tienen idea de lo que está diciendo.
+
+
+*** Elección de líder probabilístico
+
+    Elección de líder en anillos anónimos
+    - Seguridad: Se elige a lo más un líder único
+    - Viveza: Siempre elige por lo menos un líder
+    - Objetivo: La probabilidad de que el algoritmo no termine.
+    - Resultado de imposibilidad: El problema de la elección de líder es
+      imposible en gráficas simétricas (transitivas por vértices).
+    - Propiedad: Desde cualquier vértice todo se ve igual.
+
+    Idea de la imposibilidad en el ciclo: Si no hay ID’s, todos los procesos
+    tiene inicialmente la misma vista del sistema, es decir, tienen una vista
+    simétrica. Entonces, todos deben de mandar y recibir la misma información,
+    lo cual se repite en cada ronda. Finalmente, o todos se eligen como líder o
+    ninguno lo hace.
+
+    ¿Podemos resolver este problema utilizando algoritmos probabilísticos?
+
+    Elección de líder probabilístico
+    - Seguridad: Se elige a lo más un líder único.
+    - Viveza: Se elige por lo menos un líder (probabilístico) con cierta
+      probabilidad mayor a cero.
+    - Vamos a utilizar una moneda local (tendenciosa) para romper la simetría. n
+      es el número de procesos en el ciclo. \(\text{moneda local} =
+      \left\{\begin{array}{ll} 1 & prob = 1 - \frac{1}{n}\\ 2 & prob =
+      \frac{1}{n}\\ \end{array}\right.\)
+
+
+    Idea del algoritmo: Usar monedas para romper la simetría. Los procesos
+    generan pseudo-ID’s aleatorios. Correr un algoritmo determinista de elección
+    de líder usando los pseudo-ID’s.
+
+    #+attr_latex: :options [caption=Algoritmo Elección de Lider probabilístico]
+    #+begin_lstlisting
+    Alg ELProbCiclo:
+      SoyLider = false
+
+    Ejecutar inicialmente (tiempo 0):
+	  ID = Lanza moneda local
+	  send(<ID>) al vecino izquierdo
+
+    Al recibir <S> por la derecha:
+	  if |<S>| =​= n then # mi mensaje ha dado la vuelta
+		if ID == 2 src_latex{$\wedge$} solo hay un 2 en <S> then
+          SoyLider = true
+        else
+          SoyLider = false
+      else
+        send(<src_latex{$ID\cdot S$}>) al vecino izquierdo
+    #+end_lstlisting
+
+    Seguridad: Se elige a lo más un líder.
+    - Ningún 2. Fácil.
+    - Un sólo 2. Hay un sólo lider.
+    - Más de un 2.
+
+    Complejidades:
+    - Tiempo: n
+    - Mensajes: n2
+
+    Viveza: Se elige al menos un líder.
+
+    #+CAPTION: Viveza: se elige al menos un líder
+    #+ATTR_LaTeX: :width 0.5\textwidth
+    #+LABEL: fig:algdet
+    [[./figs/dibujoeleccion.png]]
+
+    Elección de líder
+    1. Se elige a lo más un líder.
+    2. Se elige por lo menos a un líder con probabilidad > 0
+
+    Dificultad: No hay ID’s, por lo que en el ciclo, no se puede solucionar el problema de forma determinista.
+    Alg. Simple (propiedades):
+    1. Algoritmo de tipo Monte Carlo
+    2. Probabilidad de elegir un líder: \(\frac{1}{e}\)
+    3. Tiempo: \(n\)
+    4. Mensajes: \(n^2\)
+    5. Todo proceso puede detectar si se eligió un líder
+
+    Algoritmo iterado Tipo Las Vegas: Existen ejecuciones en las que el
+    algoritmo no termina.
+    ¿Cuál es la probabilidad de que el algoritmo termine en k iteraciones?
+
+    #+CAPTION: Probabilidad de que el algoritmo termine en k iteraciones.
+    #+ATTR_LaTeX: :width 0.5\textwidth
+    #+LABEL: fig:algdet
+    [[./figs/dibujocalcprob.png]]
+
+    #+attr_latex: :options [caption=Algoritmo Elección de Líder iterado]
+    #+begin_lstlisting
+    Alg ELProbIterado:
+      SoyLider = false
+
+      Ejecutar inicialmente (tiempo 0) [*]:
+        ID = Lanza moneda local
+        send(<ID>) al vecino izquierdo
+
+      Al recibir <S> por la derecha:
+        if |<S>| == n then # mi mensaje ha dado la vuelta
+          if solo hay un 2 en <S> then
+            if ID == 2 then
+              SoyLider = true
+            else
+              SoyLider = false
+          else
+            ir a [*]
+        else
+          send(<src_latex{$ID\cdot S$}>) al vecino izquierdo
+    #+end_lstlisting
+
+    Tenemos que: \( \lim_{k \rightarrow \infty} \left(1 -
+    \frac{1}{e}\right)^{k - 1}\frac{1}{e} = 0 \) La probabilidad
+    de que el algoritmo no termine tiende a cero.
+
+    - *Tiempo*: (?)
+    - *Mensajes*: (?)
+
+    Pensamos que el algoritmo se va a ejecutar muchas veces, un número de veces
+    que tiende a infinito. Lo que buscamos saber es el ``promedio'' de tiempo
+    que toma cada ejecución, así como el número de mensajes.
+
+    Definamos una variable aleatoria \(T\) que es igual a \(k\) si la ejecución
+    del algoritmo termina en \(k\) iteraciones del algoritmo simple.
+
+    #+begin_equation
+    Pr[T = k] = \left(1 - \frac{1}{e}\right)^{k - 1}\frac{1}{e}
+    #+end_equation
+    #+begin_equation
+    E[T] = \sum\limits_{x\ \text{es un valor de T}}x Pr[T = x] < e < 3
+    #+end_equation
+
+    - *Tiempo*: \(en < 3n\)
+    - *Mensajes*: \(en^{2} < 3n^2\)
+
+
+*** Consenso (binario) probabilístico
+
+    La aleatorización nos permite eludir las limitaciones inherentes: Podemos
+    resolver consenso en sistemas asíncronos y lograr consenso en sistemas
+    síncronos en menos de \(f + 1\) rondas, en presencia de \(f\) fallas.
+
+    Nuestro último ejemplo, y quizás el más importante, de la utilidad de la
+    aleatorización en la computación distribuida es el problema del
+    consenso. Para este problema, la aleatorización nos permite eludir las
+    limitaciones inherentes: nos permite resolver consenso en sistemas
+    asincrónicos y nos permite lograr consenso en sistemas síncronos en menos
+    de \(f + 1\) rondas, en presencia de \(f\) fallas.
+
+    El problema de consenso radica en alcanzar las siguientes condiciones:
+    1. Validez: Si todos los procesos tienen la misma entrada, entonces la
+       decisión debe ser de una entrada de algún proceso.
+    2. Acuerdo: Procesos no fallidos no deciden en valores conflictuantes.
+    3. Terminación: Todos los procesos deciden con una probabilidad mayor a
+       cero.
+
+    Idealmente queremos tener terminación con probabilidad 1.
+
+    Presentamos un algoritmo probabilístico asíncrono para alcanzar consenso
+    probabilístico que tolera f fallas, bajo la suposición de \(n \ge 2f + 1\).
+    El algoritmo tiene complejidad esperada de tiempo constante.  Este
+    resultado no contradice el resultado de imposibilidad de FLP85, ya que hay
+    ejecuciones en las que los procesos no terminan. Sin embargo, esas
+    ejecuciones ocurren con probabilidad casi cero.
+    Adicionalmente, si es utilizando en un sistema síncrono, el algoritmo
+    probabilístico es rápido.
+
+    Dividimos el algoritmo en dos partes:
+    1. Una fase general basada en un esquema de votaciones utilizando las
+       preferencias individuales de los procesos para alcanzar acuerdo (cuando
+       es posible).
+    2. Un procedimiento de moneda común utilizada para romper esas
+       preferencias.
+
+    #+CAPTION: Procedimiento get-core. Parte 1 del algoritmo de consenso.
+    #+ATTR_LaTeX: :width 0.7\linewidth
+    #+LABEL: fig:get-core
+    [[file:figs/figuraCons1.png]]
+
+    Esquema del algoritmo general. El núcleo del algoritmo es una una fase
+    basada en un esquema de votación:
+
+    1. Un proceso vota por su preferencia (binaria) enviando un mensaje.
+    2. Calcula el voto como la mayoría de todas las preferencias recibidas.
+    3. Si el voto es unánime, decide en esa preferencia.
+    4. Si no, los procesos intercambian sus resultados de la votación.
+    5. Si los resultados obtenidos son los mismos que en el paso 2, elige este
+       valor, en otro caso, obtiene su preferencia para la siguiente fase
+       ``lanzando'' una moneda.
+
+
+    #+CAPTION: Procedimiento para consenso. Parte 2 del algoritmo de consenso.
+    #+ATTR_LaTeX: :width 0.7\linewidth
+    #+LABEL: fig:consenso
+    [[file:figs/figuraCons2.png]]
+
+    En cada fase, un proceso vota por su preferencia (binaria) al enviar un
+    mensaje conteniendo su preferencia. Entonces, calcula el voto como la
+    mayoría de todas las preferencias recibidas; diferentes procesos pueden ver
+    salidas distintas.
+
+    #+CAPTION: Procedimiento de moneda común. Parte 3 del algoritmo de consenso.
+    #+ATTR_LaTeX: :width 0.7\linewidth
+    #+LABEL: fig:common-coin
+    [[file:figs/figuraCons3.png]]
+
+    Si un proceso ve un voto unánime para alguna preferencia, entonces, decide
+    en esa preferencia. En caso de que algunos procesos no pudieran tomar una
+    decisión en este punto de la fase, los procesos intercambian sus resultados
+    de la votación. Si todos los resultados informados a un proceso en
+    particular son los mismos, el proceso establece su preferencia para que la
+    siguiente fase sea este valor; de lo contrario, obtiene su preferencia por
+    la siguiente fase "lanzando" una moneda común.
+
+    El algoritmo de consenso usa un procedimiento de moneda común con sesgo p,
+    cuyo complejidad de tiempo esperado es T. Entonces, la complejidad de
+    tiempo esperado para el algortimo de consenso es \(O(p^{-1}T)\).
+
+
+
+
+
+
+
+
+
+<<bibliographystyle link>>
+bibliographystyle:plain
+
+<<bibliography link>>
+bibliography:refs.bib
+
 
 * Footnotes
 
@@ -2245,4 +3697,5 @@ bidireccionales no es un gran problema.
 # Local Variables:
 # org-export-initial-scope: buffer
 # eval: (org-babel-ref-resolve "export-setup")
+# eval: (setq-local org-ref-default-bibliogtaphy "./refs.bib")
 # End:
